@@ -368,6 +368,102 @@ tbody td:first-child{color:var(--wh)}
 </div>
 
 <!-- MODAL CONFIRMACION BORRADO -->
+  <!-- === BLOQUE DE FIREBASE Y LÓGICA (AGREGADO) === -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
+  import { getFirestore, collection, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBFT9jMhbN3zcILmKSghCuUf9paL3jFnLU", 
+    authDomain: "cepa-dashboard.firebaseapp.com",
+    projectId: "cepa-dashboard",
+    storageBucket: "cepa-dashboard.appspot.com",
+    messagingSenderId: "413720796219",
+    appId: "1:413720796219:web:8884807d38840904e5901e"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.db = db;
+  window.collection = collection;
+  window.onSnapshot = onSnapshot;
+  window.addDoc = addDoc;
+</script>
+
+<script>
+  let DATA_COLEGIOS = [];
+
+  // Escucha activa a tu colección "cepa_edits"
+  window.onSnapshot(window.collection(window.db, "cepa_edits"), (snapshot) => {
+      DATA_COLEGIOS = []; 
+      snapshot.forEach((firestoreDoc) => {
+          const datosNube = firestoreDoc.data();
+          DATA_COLEGIOS.push({
+              id_firebase: firestoreDoc.id, 
+              rbd: datosNube.rbd || firestoreDoc.id, 
+              nombre: datosNube.nombre || "Sin Nombre",
+              region: datosNube.region || "",
+              comuna: datosNube.comuna || "",
+              dependencia: datosNube.dependencia || "",
+              ruralidad: datosNube.ruralidad || "",
+              pie: datosNube.pie || "",
+              coordinadora: datosNube.coordinadora || "",
+              telefono: datosNube.telefono || "",
+              correo: datosNube.correo || "",
+              provincia: datosNube.provincia || "",
+              matricula: parseInt(datosNube.matricula) || 0
+          });
+      });
+
+      // Si tu función encargada de redibujar los gráficos/tablas se llama diferente, avísame
+      if (typeof actualizarDashboard === "function") {
+          actualizarDashboard(DATA_COLEGIOS); 
+      }
+  });
+
+  // Evento para capturar el botón de guardar de tu modal
+  document.addEventListener('DOMContentLoaded', () => {
+      const btnGuardar = document.getElementById('btnSaveNew');
+      if (btnGuardar) {
+          btnGuardar.addEventListener('click', async () => {
+              const nuevoColegio = {
+                  rbd: document.getElementById('nRbd')?.value || '',
+                  nombre: document.getElementById('nNom')?.value || '',
+                  matricula: document.getElementById('nMat')?.value || '',
+                  region: document.getElementById('nReg')?.value || '',
+                  provincia: document.getElementById('nProv')?.value || '',
+                  comuna: document.getElementById('nCom')?.value || '',
+                  dependencia: document.getElementById('nDep')?.value || '',
+                  ruralidad: document.getElementById('nRur')?.value || '',
+                  pie: document.getElementById('nPie')?.value || '',
+                  coordinadora: document.getElementById('nCoord')?.value || '',
+                  telefono: document.getElementById('nTel')?.value || '',
+                  correo: document.getElementById('nCorr')?.value || ''
+              };
+
+              if(!nuevoColegio.rbd || !nuevoColegio.nombre) {
+                  const errDiv = document.getElementById('nErr');
+                  if(errDiv) {
+                      errDiv.innerText = "Por favor completa los campos obligatorios";
+                      errDiv.style.display = "block";
+                  }
+                  return;
+              }
+
+              try {
+                  await window.addDoc(window.collection(window.db, "cepa_edits"), nuevoColegio);
+                  document.getElementById('ovNew')?.classList.remove('open');
+              } catch (error) {
+                  console.error("Error Firebase:", error);
+              }
+          });
+      }
+  });
+</script>
+<!-- ============================================= -->
 <div class="ov" id="ovDel">
   <div class="modal" style="width:380px">
     <div class="mhdr" style="background:rgba(239,68,68,.15)">
