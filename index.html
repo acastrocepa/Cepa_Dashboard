@@ -371,9 +371,11 @@ tbody td:first-child{color:var(--wh)}
   <!-- === BLOQUE DE FIREBASE Y LÓGICA (AGREGADO) === -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-app.js";
-  import { getFirestore, collection, onSnapshot, addDoc } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
+  import { getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.10.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBFT9jMhbN3zcILmKSghCuUf9paL3jFnLU", 
@@ -387,590 +389,537 @@ tbody td:first-child{color:var(--wh)}
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  window.db = db;
-  window.collection = collection;
-  window.onSnapshot = onSnapshot;
-  window.addDoc = addDoc;
+  // Exponer a contexto global de forma segura
+  window.fbDb = db;
+  window.fbCol = collection;
+  window.fbSnap = onSnapshot;
+  window.fbDoc = doc;
+  window.fbAdd = addDoc;
+  window.fbUpd = updateDoc;
+  window.fbDel = deleteDoc;
 </script>
 
 <script>
-  let DATA_COLEGIOS = [];
+var RAW = [];
+var FBC = 'cepa_edits'; 
+var isA = false; 
+var cS = null; 
 
-  // Escucha activa a tu colección "cepa_edits"
-  window.onSnapshot(window.collection(window.db, "cepa_edits"), (snapshot) => {
-      DATA_COLEGIOS = []; 
-      snapshot.forEach((firestoreDoc) => {
-          const datosNube = firestoreDoc.data();
-          DATA_COLEGIOS.push({
-              id_firebase: firestoreDoc.id, 
-              rbd: datosNube.rbd || firestoreDoc.id, 
-              nombre: datosNube.nombre || "Sin Nombre",
-              region: datosNube.region || "",
-              comuna: datosNube.comuna || "",
-              dependencia: datosNube.dependencia || "",
-              ruralidad: datosNube.ruralidad || "",
-              pie: datosNube.pie || "",
-              coordinadora: datosNube.coordinadora || "",
-              telefono: datosNube.telefono || "",
-              correo: datosNube.correo || "",
-              provincia: datosNube.provincia || "",
-              matricula: parseInt(datosNube.matricula) || 0
-          });
-      });
+// CONFIGURACIÓN DE LOS GRÁFICOS (CHART.JS)
+var charts = { reg:null, dep:null, mkt:null, t25:null, sub:null };
 
-      // Si tu función encargada de redibujar los gráficos/tablas se llama diferente, avísame
-      if (typeof actualizarDashboard === "function") {
-          actualizarDashboard(DATA_COLEGIOS); 
-      }
+function initCharts() {
+  var ctxReg = document.getElementById('cReg').getContext('2d');
+  charts.reg = new Chart(ctxReg, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: '#1a6cf5', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e3050' }, ticks: { color: '#8ba3c7', font: { size: 9 } } }, y: { grid: { display: false }, ticks: { color: '#8ba3c7', font: { size: 9 } } } }, onClick: function(e, items) { if(items.length > 0) { var idx = items[0].index; var reg = charts.reg.data.labels[idx]; document.getElementById('fReg').value = reg; document.getElementById('fReg').dispatchEvent(new Event('change')); } } }
   });
 
-  // Evento para capturar el botón de guardar de tu modal
-  document.addEventListener('DOMContentLoaded', () => {
-      const btnGuardar = document.getElementById('btnSaveNew');
-      if (btnGuardar) {
-          btnGuardar.addEventListener('click', async () => {
-              const nuevoColegio = {
-                  rbd: document.getElementById('nRbd')?.value || '',
-                  nombre: document.getElementById('nNom')?.value || '',
-                  matricula: document.getElementById('nMat')?.value || '',
-                  region: document.getElementById('nReg')?.value || '',
-                  provincia: document.getElementById('nProv')?.value || '',
-                  comuna: document.getElementById('nCom')?.value || '',
-                  dependencia: document.getElementById('nDep')?.value || '',
-                  ruralidad: document.getElementById('nRur')?.value || '',
-                  pie: document.getElementById('nPie')?.value || '',
-                  coordinadora: document.getElementById('nCoord')?.value || '',
-                  telefono: document.getElementById('nTel')?.value || '',
-                  correo: document.getElementById('nCorr')?.value || ''
-              };
-
-              if(!nuevoColegio.rbd || !nuevoColegio.nombre) {
-                  const errDiv = document.getElementById('nErr');
-                  if(errDiv) {
-                      errDiv.innerText = "Por favor completa los campos obligatorios";
-                      errDiv.style.display = "block";
-                  }
-                  return;
-              }
-
-              try {
-                  await window.addDoc(window.collection(window.db, "cepa_edits"), nuevoColegio);
-                  document.getElementById('ovNew')?.classList.remove('open');
-              } catch (error) {
-                  console.error("Error Firebase:", error);
-              }
-          });
-      }
+  var ctxDep = document.getElementById('cDep').getContext('2d');
+  charts.dep = new Chart(ctxDep, {
+    type: 'doughnut',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: ['#ef4444', '#38bdf8', '#1a6cf5', '#fbbf24', '#a855f7'] }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '70%', onClick: function(e, items) { if(items.length > 0) { var idx = items[0].index; var dep = charts.dep.data.labels[idx]; toggleChip('cDeps', dep); } } }
   });
-</script>
-<!-- ============================================= -->
-<div class="ov" id="ovDel">
-  <div class="modal" style="width:380px">
-    <div class="mhdr" style="background:rgba(239,68,68,.15)">
-      <div><div class="mrbd" style="color:#f87171">CONFIRMAR ELIMINACION</div><div class="mname" id="delNombre">-</div></div>
-      <button class="mclose" id="mcDel">X</button>
-    </div>
-    <div class="mbody">
-      <p style="font-size:12px;color:var(--tx2)">Esta accion eliminar&aacute; el colegio del dashboard. Los datos en Firebase tambi&eacute;n ser&aacute;n eliminados.</p>
-      <p style="font-size:12px;color:#f87171;margin-top:10px;font-weight:600">Esta accion no se puede deshacer.</p>
-    </div>
-    <div class="mfooter">
-      <button class="mbtn" id="mcDel2">Cancelar</button>
-      <button class="mbtn" id="btnConfirmDel" style="border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.15);color:#f87171;font-weight:600">Eliminar colegio</button>
-    </div>
-  </div>
-</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script>
-var RAW = JSON.parse('[{"rbd": "12726", "nombre": "COLEGIO MONTE CARMELO", "telefono": "56 572 465000", "coordinadora": "Claudia Beza", "correo": "cbesa@colegio-montecarmelo.cl", "region": "TPCA", "provincia": "IQUIQUE", "comuna": "ALTO HOSPICIO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 600}, {"rbd": "5654", "nombre": "INSTITUTO CLARET", "telefono": "56452550400 (centro) /56452550300 (campus)", "coordinadora": "Marcela Carrera Vegas (centro) / Paula Mart\\u00ednez Bucarey (campus)", "correo": "coordinacionpiecentro@institutoclaret.cl;coordinacionpiecampus@institutoclaret.cl", "region": "ARAUC", "provincia": "CAUT\\u00cdN NORTE", "comuna": "TEMUCO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 3227}, {"rbd": "279", "nombre": "LICEO INDUSTRIAL EULOGIO GORDO MONEO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 2073}, {"rbd": "280", "nombre": "LICEO COMERCIAL JERARDO MUNOZ CAMPOS", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1492}, {"rbd": "304", "nombre": "LICEO BICENTENARIO ANDR\\u00c9S SABELLA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1334}, {"rbd": "293", "nombre": "ESCUELA JOSE PAPIC RADNIC", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1235}, {"rbd": "284", "nombre": "LICEO DE HOMBRES DE ANTOFAGASTA MARIO BAHAMONDE SILVA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1227}, {"rbd": "10487", "nombre": "COLEGIO POLIVALENTE DOMINGO MATTE MESIAS", "telefono": "562 3239 6500", "coordinadora": "", "correo": "", "region": "RM", "provincia": "CORDILLERA", "comuna": "PUENTE ALTO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 3648}, {"rbd": "313", "nombre": "ESCUELA ARTURO PRAT", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1227}, {"rbd": "283", "nombre": "LICEO TECNICO ANTOFAGASTA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1160}, {"rbd": "12840", "nombre": "ESCUELA JUAN PABLO II", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1090}, {"rbd": "12962", "nombre": "ESCUELA ELMO FUNEZ CARRIZO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1071}, {"rbd": "2579", "nombre": "INSTITUTO REGIONAL FEDERICO ERRAZURIZ", "telefono": "722848222 - 722848216", "coordinadora": "Valezka Trujillo Martinez", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1703}, {"rbd": "12944", "nombre": "REVERENDO PADRE PATRICIO CARIOLA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1058}, {"rbd": "285", "nombre": "LICEO BICENTENARIO MARTA NAREA DIAZ", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1053}, {"rbd": "291", "nombre": "ESCUELA PADRE GUSTAVO LE PAIGE DE WALQUE", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1046}, {"rbd": "317", "nombre": "ESCUELA LAS ROCAS", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1026}, {"rbd": "287", "nombre": "LICEO DOMINGO HERRERA RIVERA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1019}, {"rbd": "305", "nombre": "ESCUELA HUMBERTO GONZALEZ ECHEGOYEN", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1019}, {"rbd": "31343", "nombre": "LICEO CIENTIFICO HUMANISTA LA CHIMBA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1002}, {"rbd": "288", "nombre": "ESCUELA JAPON", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 969}, {"rbd": "311", "nombre": "ESC DIFERENCIAL JUAN SANDOVAL CARRASCO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 201}, {"rbd": "12972", "nombre": "COLEGIO LA CONCEPCION", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 50}, {"rbd": "10979", "nombre": "LICEO A.RENDIC I, ANEXO CENTRO PREVENCION FEM", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 26}, {"rbd": "282", "nombre": "LICEO A. RENDIC I. ANEXO C. REHABILIT. SOCIAL", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 16}, {"rbd": "299", "nombre": "ESCUELA GRECIA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "308", "nombre": "ESCUELA DE ADULTOS DR.ANTONIO RENDIC", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "321", "nombre": "ESCUELA BASICA SIMON BOLIVAR PALACIOS", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "327", "nombre": "ESCUELA PEDRO AGUIRRE CERDA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "12937", "nombre": "LICEO POLITECNICO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "320", "nombre": "LICEO ARTISTICO DE ANTOFAGASTA `ARMANDO CARRERA GONZALEZ`", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 941}, {"rbd": "10968", "nombre": "LICEO MAYOR GRAL.(E) OSCAR BONILLA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 906}, {"rbd": "31345", "nombre": "LICEO POLIT\\u00c9CNICO LOS ARENALES", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 895}, {"rbd": "319", "nombre": "ESCUELA LA BANDERA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 879}, {"rbd": "286", "nombre": "LICEO LA PORTADA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 858}, {"rbd": "292", "nombre": "ESCUELA REPUBLICA DE ITALIA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 820}, {"rbd": "294", "nombre": "ESCUELA PROFESORA LJUBICA DOMIC WUTH", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 767}, {"rbd": "12870", "nombre": "C.E.I.A. ANTONIO RENDIC.", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 737}, {"rbd": "312", "nombre": "ESCUELA ECUADOR", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 704}, {"rbd": "289", "nombre": "ESCUELA ESPANA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 671}, {"rbd": "329", "nombre": "LICEO BICENTENARIO INSTITUTO JOS\\u00c9 MAZA SANCHO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 655}, {"rbd": "7331", "nombre": "INSTITUTO COMERCIAL DE OSORNO", "telefono": "64) 223 3998", "coordinadora": "Jennifer Aguila Katherine Oyarz\\u00faa", "correo": "jaguila@institutocomercialosorno.cl;koyarzun@institutocomercialosorno.cl", "region": "LAGOS", "provincia": "OSORNO", "comuna": "OSORNO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1055}, {"rbd": "301", "nombre": "ESCUELA ROMULO J. PENA MATURANA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 621}, {"rbd": "326", "nombre": "ESCUELA SANTIAGO AMENGUAL B.", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 619}, {"rbd": "296", "nombre": "ESCUELA REPUBLICA DE LOS ESTADOS UNIDOS", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 617}, {"rbd": "297", "nombre": "ESCUELA ALCALDE MAXIMILIANO POBLETE", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 617}, {"rbd": "12945", "nombre": "ESCUELA ECOLOGICA PADRE ALBERTO HURTADO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 613}, {"rbd": "302", "nombre": "ESCUELA JUAN LOPEZ", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 594}, {"rbd": "322", "nombre": "ESCUELA GENERAL MANUEL BAQUEDANO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 592}, {"rbd": "9684", "nombre": "COLEGIO SAN GREGORIO DE LA SALLE", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "LA GRANJA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1067}, {"rbd": "298", "nombre": "ESCUELA DARIO SALAS DIAZ", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 564}, {"rbd": "332", "nombre": "ESCUELA GABRIELA MISTRAL", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 560}, {"rbd": "12225", "nombre": "COLEGIO BICENTENARIO SAN ESTEBAN MARTIR", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "LO BARNECHEA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1053}, {"rbd": "310", "nombre": "ESCUELA CLAUDIO MATTE PEREZ", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 529}, {"rbd": "315", "nombre": "ESCUELA HEROES DE LA CONCEPCION", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 513}, {"rbd": "324", "nombre": "ESCUELA FUNDACION MINERA ESCONDIDA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 509}, {"rbd": "303", "nombre": "ESCUELA REPUBLICA ARGENTINA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 503}, {"rbd": "316", "nombre": "ESCUELA LAS AMERICAS PROFESOR JUSTO VALLADARES ORELLANA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 413}, {"rbd": "306", "nombre": "ESCUELA HUANCHACA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 330}, {"rbd": "318", "nombre": "ESCUELA EDDA CUNEO DONNAGIO", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 318}, {"rbd": "8675", "nombre": "COLEGIO SANTA TERESITA DEL NINO JESUS", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO CENTRO", "comuna": "SANTIAGO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 982}, {"rbd": "307", "nombre": "ESCUELA DE PARVULOS MARCELA PAZ", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 249}, {"rbd": "333", "nombre": "ESCUELA DE PARVULOS BLANCA NIEVES", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 220}, {"rbd": "12822", "nombre": "ESCUELA DE PARVULOS SEMILLITA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 204}, {"rbd": "330", "nombre": "ESCUELA DE PARVULOS LOS PINGUINITOS", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "ANTOFAGASTA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 154}, {"rbd": "10638", "nombre": "LICEO 131", "telefono": "56 4 4285 4003 / 56 4 4285 4018", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 3042}, {"rbd": "10658", "nombre": "LICEO POLIVALENTE MODERNO CARDENAL CARO", "telefono": "22 2902300", "coordinadora": "Daniela Valdes", "correo": "danielavaldes@lccbuin.cl", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 2900}, {"rbd": "25591", "nombre": "LICEO TECNICO PROFESIONAL DE BUIN", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 969}, {"rbd": "10641", "nombre": "LICEO ALTO JAHUEL", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 959}, {"rbd": "10645", "nombre": "LICEO FRANCISCO JAVIER KRUGGER ALVARADO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 904}, {"rbd": "10640", "nombre": "COLEGIO DE MAIPO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 872}, {"rbd": "10651", "nombre": "ESCUELA LOS ROSALES DEL BAJO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 747}, {"rbd": "10646", "nombre": "ESCUELA VALDIVIA DE PAINE", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 519}, {"rbd": "10649", "nombre": "ESCUELA HUMBERTO MORENO RAMIREZ", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 415}, {"rbd": "10642", "nombre": "LICEO POLIVALENTE LOS GUINDOS", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 388}, {"rbd": "10643", "nombre": "ESCUELA VILLASECA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 339}, {"rbd": "5219", "nombre": "LICEO BICENTENARIO POLITECNICO JUANITA FERNANDEZ", "telefono": "", "coordinadora": "Judith Guzman", "correo": "judith.guzman@liceojfs.cl>", "region": "ARAUC", "provincia": "MALLECO", "comuna": "ANGOL", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 854}, {"rbd": "10656", "nombre": "ESCUELA BASICA G-N\\u00b0813 LOS AROMOS DE EL RECURSO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 326}, {"rbd": "10652", "nombre": "ESCUELA VILUCO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 281}, {"rbd": "10648", "nombre": "ESCUELA LO SALINAS", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "BUIN", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 271}, {"rbd": "4289", "nombre": "LICEO MANUEL AR\\u00cdSTIDES ZA\\u00d1ARTU", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 597}, {"rbd": "12020", "nombre": "ESCUELA BASICA ENRIQUE ZANARTU PRIETO", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 507}, {"rbd": "17814", "nombre": "ESCUELA ALTO CABRERO", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 505}, {"rbd": "4288", "nombre": "LICEO BICENTENARIO POLIT\\u00c9CNICO MONTE \\u00c1GUILA", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 464}, {"rbd": "4292", "nombre": "ESCUELA SALTO EL LAJA", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 353}, {"rbd": "17787", "nombre": "ESCUELA ORLANDO VERA VILLARROEL", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 353}, {"rbd": "4290", "nombre": "ESCUELA CHARRUA", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 154}, {"rbd": "4306", "nombre": "ESCUELA EL PROGRESO", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 36}, {"rbd": "4297", "nombre": "ESCUELA LAS OBRAS", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "CABRERO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 9}, {"rbd": "12836", "nombre": "LICEO BICENTENARIO COLEGIO R\\u00cdO LOA", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "EL LOA", "comuna": "CALAMA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 1236}, {"rbd": "253", "nombre": "COLEGIO ADVENTISTA DE CALAMA", "telefono": "968370903 - 9 74 27 97 83", "coordinadora": "Aylin Gonzalez", "correo": "coordinadorpie.cadecal@adm.educadventista.org;coordinadorpie.cadecal@adm.educadventista.org", "region": "ANTOF", "provincia": "EL LOA", "comuna": "CALAMA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1067}, {"rbd": "14381", "nombre": "COLEGIO EL VALLE DE CASABLANCA", "telefono": "9 5912 4525", "coordinadora": "Franca Ramirez / Isabel Aranda", "correo": "valentinabaez.consultas@colegioelvalle.cl; isabelaranda.consultas@colegioelvalle.cl;francaramirez.consultas@colegioelvalle.cl", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "CASABLANCA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 500}, {"rbd": "20181", "nombre": "COLEGIO SAINT PATRICK SCHOOL", "telefono": "(+45) 3224123", "coordinadora": "Catalina Fredes / Mar\\u00eda Paz Ferreira / Carolina Olave", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN NORTE", "comuna": "TEMUCO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 813}, {"rbd": "40080", "nombre": "LICEO FERMIN DEL REAL CASTILLO", "telefono": "56 9 7832 3293", "coordinadora": "Carolina Araneda", "correo": "carolina.a@lfrc.cl", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "CH\\u00c9PICA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 563}, {"rbd": "25342", "nombre": "ESCUELA RAIMAPU-TIERRA FLORIDA", "telefono": "", "coordinadora": "Javiera Flores German", "correo": "", "region": "RM", "provincia": "CORDILLERA", "comuna": "LA FLORIDA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 779}, {"rbd": "2493", "nombre": "ESCUELA BAS. JOSE MIGUEL CARRERA VERDUGO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "CHIMBARONGO", "dependencia": "SLEP COLCHAGUA", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 231}, {"rbd": "4048", "nombre": "ESCUELA VILLA JESUS DE COELEMU", "telefono": "", "coordinadora": "", "correo": "", "region": "NUBLE", "provincia": "\\u00d1UBLE", "comuna": "COELEMU", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 599}, {"rbd": "18002", "nombre": "ESCUELA JOSE FRANCISCO PINO MEDINA", "telefono": "", "coordinadora": "", "correo": "", "region": "NUBLE", "provincia": "\\u00d1UBLE", "comuna": "COELEMU", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 389}, {"rbd": "6223", "nombre": "LICEO BICENTENARIO CIENCIAS Y HUMANIDADES RBD 6223-5", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 701}, {"rbd": "4051", "nombre": "ESCUELA CLEMENTINA MAUREIRA ALMANZA", "telefono": "", "coordinadora": "", "correo": "", "region": "NUBLE", "provincia": "\\u00d1UBLE", "comuna": "COELEMU", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 129}, {"rbd": "4059", "nombre": "ESCUELA FELIPE CUBILLOS SIGAL", "telefono": "", "coordinadora": "", "correo": "", "region": "NUBLE", "provincia": "\\u00d1UBLE", "comuna": "COELEMU", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 58}, {"rbd": "4636", "nombre": "COLEGIO MARCELA PAZ", "telefono": "41-2240243", "coordinadora": "Helga Acu\\u00f1a", "correo": "hacuna@mpco.cl", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "CONCEPCI\\u00d3N", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 509}, {"rbd": "10385", "nombre": "ESCUELA PART. ADVENTISTA SANTIAGO NORTE", "telefono": "226681853979263176", "coordinadora": "Jean Cisternas", "correo": "coordinador.casan@educacionadventista.cl", "region": "RM", "provincia": "SANTIAGO NORTE", "comuna": "CONCHAL\\u00cd", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 549}, {"rbd": "433", "nombre": "COLEGIO ADVENTISTA DE COPIAP\\u00d3", "telefono": "522212521 990502530", "coordinadora": "Lissette Barrera / Dora Salamanca", "correo": "corpiebasica.cadecop@adm.educadventista.org; corpiemedia.cadecop@adm.educadventista.org", "region": "ATCMA", "provincia": "COPIAP\\u00d3", "comuna": "COPIAP\\u00d3", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1026}, {"rbd": "411", "nombre": "ESCUELA LAS CANTERAS", "telefono": "", "coordinadora": "", "correo": "", "region": "ATCMA", "provincia": "COPIAP\\u00d3", "comuna": "COPIAP\\u00d3", "dependencia": "SLEP", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 600}, {"rbd": "13313", "nombre": "COLEGIO FRANCIS SCHOOL", "telefono": "51 2 265907/ 51 2 266562", "coordinadora": "Leticia Araya", "correo": "leticia.araya@francisschool.cl", "region": "COQ", "provincia": "ELQUI", "comuna": "COQUIMBO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 2148}, {"rbd": "13373", "nombre": "COLEGIO PARTICULAR LEONARDO DA VINCI", "telefono": "(+56)512 248772", "coordinadora": "Evelyn Tapia", "correo": "evelyn.tapia@davincicoquimbo.cl", "region": "COQ", "provincia": "ELQUI", "comuna": "COQUIMBO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 911}, {"rbd": "8365", "nombre": "LICEO SAN FELIPE BENICIO DE COYHAIQUE", "telefono": "(67) 2-231226", "coordinadora": "Esterlita Lepe Torres", "correo": "elepe@lsfb.cl;ymansilla@lsfb.cl;carmen.jimenez@lsfb.cl;mmansilla@lsfb.cl;lorena.mora@lsfb.cl;mparedes@lsfb.cl;fvera@lsfb.cl;ndominguez@lsfb.cl;acornejo@lsfb.cl;jcaro@lsfb.cl", "region": "AYSEN", "provincia": "COYHAIQUE", "comuna": "COYHAIQUE", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1055}, {"rbd": "25201", "nombre": "ESCUELA BAS. Y ESP. N_ 115 RENACER", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "CORDILLERA", "comuna": "PUENTE ALTO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 667}, {"rbd": "6027", "nombre": "COMPLEJO EDUCACIONAL MONSE\\u00d1OR FRCO. VALDES S", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "CURARREHUE", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 316}, {"rbd": "6273", "nombre": "ESC.PRESBITERO JOSE AGUSTIN GOMEZ Z.", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "GORBEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 418}, {"rbd": "6269", "nombre": "LICEO BICENTENARIO COMPLEJO EDUCACIONAL ANDRES ANTONIO GORBEA", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "GORBEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 309}, {"rbd": "6271", "nombre": "ESCUELA BASICA CINCO", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "GORBEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 261}, {"rbd": "6270", "nombre": "LICEO JOSE VICTORINO LASTARRIA", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "GORBEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 213}, {"rbd": "6285", "nombre": "ESCUELA BASICA LOS PERALES", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "GORBEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 163}, {"rbd": "6272", "nombre": "ESCUELA BASICA LICARAYEN", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "GORBEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 153}, {"rbd": "2206", "nombre": "ESCUELA SIXTO MENDEZ PARADA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 444}, {"rbd": "15762", "nombre": "COLEGIO MAR\\u00cdA ESCOBILLANA GUZM\\u00c1N", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 311}, {"rbd": "2210", "nombre": "ESCUELA MUNICIPAL VILLA LA COMPANIA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 298}, {"rbd": "2205", "nombre": "LICEO PROFESOR MISAEL LOBOS MONROY", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 278}, {"rbd": "2209", "nombre": "COLEGIO ANTONIO TRDAN ARKO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 259}, {"rbd": "2212", "nombre": "ESCUELA MUNICIPAL DE TUNICHE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 142}, {"rbd": "15763", "nombre": "COLEGIO ANTUHUE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "GRANEROS", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 10}, {"rbd": "133", "nombre": "COLEGIO ADVENTISTA DE IQUIQUE", "telefono": "572425565", "coordinadora": "Gimena Alvarez", "correo": "coordinadorpie.cai@adm.educadventista.org", "region": "TPCA", "provincia": "IQUIQUE", "comuna": "IQUIQUE", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 742}, {"rbd": "4760", "nombre": "COLEGIO BERNARDO O\\u00b4HIGGINS", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "HUALP\\u00c9N", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 536}, {"rbd": "10606", "nombre": "COLEGIO GETSEMANI", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "SAN BERNARDO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 524}, {"rbd": "20404", "nombre": "ESCUELA DEL CARI\\u00d1O SAINT CHRISTIAN", "telefono": "(2) 2409 5851", "coordinadora": "Isabel Reyes Jim\\u00e9nez", "correo": "equipopie@escuelasdelcarino.org", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "LA GRANJA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 562}, {"rbd": "40298", "nombre": "COLEGIO BERNARDO O\\u00b4HIGGINS", "telefono": "512453370", "coordinadora": "Ruth Arancibia", "correo": "rutharancibia@cbolaserena.com", "region": "COQ", "provincia": "ELQUI", "comuna": "LA SERENA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1394}, {"rbd": "15624", "nombre": "COLEGIO MISTRAL", "telefono": "", "coordinadora": "Ingrid Araya", "correo": "ingrid.araya@colegiomistral.cl", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "LAS CABRAS", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1203}, {"rbd": "26037", "nombre": "COLEGIO LO BARNECHEA BICENTENARIO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "LO BARNECHEA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 962}, {"rbd": "12005", "nombre": "COLEGIO DON ORIONE", "telefono": "9 33790926", "coordinadora": "Ingrid Acu\\u00f1a", "correo": "ingrid.acuna@donorionelosangeles.cl;pie@donorionelosangeles.cl", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "LOS \\u00c1NGELES", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 912}, {"rbd": "4269", "nombre": "COLEGIO HISPANOAMERICANO", "telefono": "43 231 1618 / +56 9 7101 9884", "coordinadora": "Constanza Mas\\u00edas", "correo": "cmasiaso@hispanoamericanocolegio.cl", "region": "BBIO", "provincia": "BIOB\\u00cdO", "comuna": "LOS \\u00c1NGELES", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 897}, {"rbd": "2310", "nombre": "ESC.ALCIDES REYES FRIAS", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 314}, {"rbd": "15720", "nombre": "LICEO MUNICIPAL ZOILA ROSA CARRENO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 280}, {"rbd": "2312", "nombre": "ESCUELA MUNICIPAL DE PANQUEHUE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 239}, {"rbd": "22564", "nombre": "LICEO BICENTENARIO ADOLFO MATTHEI", "telefono": "", "coordinadora": "", "correo": "", "region": "LAGOS", "provincia": "OSORNO", "comuna": "OSORNO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 448}, {"rbd": "2311", "nombre": "ESCUELA PELEQUEN", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 235}, {"rbd": "2313", "nombre": "ESCUELA MUNICIPAL DE LIMAHUE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 234}, {"rbd": "24431", "nombre": "COLEGIO HAYDN DE LA FLORIDA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "CORDILLERA", "comuna": "LA FLORIDA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 442}, {"rbd": "2317", "nombre": "ESC.ZOILA ROSA CARRENO C.", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "2318", "nombre": "ESCUELA MUNICIPAL DE PELEQUEN VIEJO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "NO TIENE PIE", "matricula": 0}, {"rbd": "31106", "nombre": "COLEGIO SAINT JOAN COLLEGE", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "SANTA JUANA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 409}, {"rbd": "2314", "nombre": "ESCUELA MUNICIPAL DE CORCOLEN", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 122}, {"rbd": "2475", "nombre": "ESCUELA LOS MAQUIS", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "MALLOA", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 11}, {"rbd": "14266", "nombre": "COLEGIO NAZCA BELEN", "telefono": "", "coordinadora": "", "correo": "", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "QUILPU\\u00c9", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 395}, {"rbd": "367", "nombre": "COMPLEJO EDUCATIVO JUAN JOSE LATORRE BENAVENT", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "MEJILLONES", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1678}, {"rbd": "8368", "nombre": "ESCUELA PARTICULAR SAN JOSE OBRERO", "telefono": "", "coordinadora": "", "correo": "", "region": "AYSEN", "provincia": "COYHAIQUE", "comuna": "COYHAIQUE", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 385}, {"rbd": "368", "nombre": "ESCUELA BASICA JULIA HERRERA VARAS", "telefono": "", "coordinadora": "", "correo": "", "region": "ANTOF", "provincia": "ANTOFAGASTA - TOCOPILLA", "comuna": "MEJILLONES", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1202}, {"rbd": "9100", "nombre": "LICEO REPUBLICA DE SIRIA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 2012}, {"rbd": "9073", "nombre": "LICEO BICENTENARIO CARMELA SILVA DONOSO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1467}, {"rbd": "6224", "nombre": "ESCUELA UNION LATINOAMERICANA", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 411}, {"rbd": "9074", "nombre": "LICEO JOSE TORIBIO MEDINA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1069}, {"rbd": "9071", "nombre": "LICEO AUGUSTO D HALMAR", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 954}, {"rbd": "9078", "nombre": "LICEO LENKA FRANULIC", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 892}, {"rbd": "9084", "nombre": "ESC.PRESIDENTE EDUARDO FREI MONTALVA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 784}, {"rbd": "9077", "nombre": "COMPLEJO EDUC.MUN. BRIGIDA  WALKER.", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 770}, {"rbd": "14643", "nombre": "CASABLANCA BILINGUAL SCHOOL", "telefono": "", "coordinadora": "", "correo": "", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "CASABLANCA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 314}, {"rbd": "17692", "nombre": "COLEGIO GOLDEN SCHOOL", "telefono": "", "coordinadora": "", "correo": "", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "CHIGUAYANTE", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 313}, {"rbd": "9082", "nombre": "COL TEC PROFESIONAL REPUBLICA ARGENTINA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 661}, {"rbd": "9089", "nombre": "ESCUELA B\\u00c1SICA JOS\\u00c9 TORIBIO MEDINA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 623}, {"rbd": "9097", "nombre": "ESCUELA REPUBLICA DE COSTA RICA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 609}, {"rbd": "9102", "nombre": "ESCUELA GUILLERMO ZANARTU IRIGOYEN", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 609}, {"rbd": "25162", "nombre": "ESC. PARTICULAR RAIN - BOW", "telefono": "2 3207 21 74", "coordinadora": "Basti\\u00e1n Espinoza", "correo": "b.alexisespinoza@gmail.com;", "region": "RM", "provincia": "CORDILLERA", "comuna": "PUENTE ALTO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 282}, {"rbd": "9070", "nombre": "ESCUELA BENJAMIN CLARO VELASCO", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 589}, {"rbd": "9131", "nombre": "ESCUELA JUAN MOYA MORALES", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 560}, {"rbd": "9091", "nombre": "ESCUELA REPUBLICA DE FRANCIA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 392}, {"rbd": "24959", "nombre": "ESCUELA INTERCULTURAL KALLF\\u00dc MAPU", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO ORIENTE", "comuna": "\\u00d1U\\u00d1OA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 351}, {"rbd": "7338", "nombre": "ESCUELA LEONILA FOLCH LOPEZ", "telefono": "", "coordinadora": "Sue Baez", "correo": "", "region": "LAGOS", "provincia": "OSORNO", "comuna": "OSORNO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 549}, {"rbd": "7341", "nombre": "ESCUELA MONSE\\u00d1OR FRANCISCO VALDES SUBERCASEAUX", "telefono": "", "coordinadora": "", "correo": "", "region": "LAGOS", "provincia": "OSORNO", "comuna": "OSORNO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 211}, {"rbd": "13467", "nombre": "COLEGIO SANTA MARIA DEL REFUGIO", "telefono": "", "coordinadora": "", "correo": "", "region": "COQ", "provincia": "ELQUI", "comuna": "COQUIMBO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 256}, {"rbd": "24878", "nombre": "CENTRO EDUCACIONAL FERNANDO DE ARAGON", "telefono": "", "coordinadora": "Camila Cantillana", "correo": "camilacantillana2211@gmail.com", "region": "RM", "provincia": "CORDILLERA", "comuna": "PUENTE ALTO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 2852}, {"rbd": "14417", "nombre": "COLEGIO PAIDOS", "telefono": "", "coordinadora": "", "correo": "", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "VALPARA\\u00cdSO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 249}, {"rbd": "25571", "nombre": "COLEGIO EL RACO", "telefono": "", "coordinadora": "Daniela Leiva Urrea", "correo": "pie.cer@colegioelraco.cl;camila.torres@colegioelraco.cl;g.valderrama@colegioelraco.cl;c.torres@colegioelraco.cl;e.rebolledo@colegioelraco.cl;r.castillo@colegioelraco.cl;m.pavez@colegioelraco.cl;c.teneb@colegioelraco.cl;b.osores@colegioelraco.cl;n.martin@colegioelraco.cl;y.yanez@colegioelraco.cl;c.alegria@colegioelraco.cl;m.bovet@colegioelraco.cl;m.garrido@colegioelraco.cl;", "region": "RM", "provincia": "CORDILLERA", "comuna": "PUENTE ALTO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1095}, {"rbd": "40406", "nombre": "COLEGIO MADRE ISABEL LARRA\\u00d1AGA", "telefono": "", "coordinadora": "", "correo": "", "region": "LAGOS", "provincia": "LLANQUIHUE", "comuna": "PUERTO MONTT", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 246}, {"rbd": "7699", "nombre": "COLEGIO SALESIANO PADRE JOSE FERNANDEZ PEREZ", "telefono": "(65) 225 9542 / 993223539", "coordinadora": "Katherine Rodriguez / Vania Benitez / Yazna Baez / Mar\\u00eda Mardones / Sylvia Gallatdo / Macarena Lagos / Elisa Arredondo / Ana Mar\\u00eda  Miranda /  Jocelyn Alvarado / Elena Mancilla  / Paulina Mardones / Nicol C\\u00e1rcamo / Nadia Vargas / Francisca Almonacid / Claudia Vielma / Mar\\u00eda Abarca / Danitza Emhardt", "correo": "encargadopie@salesianospuertomontt.cl;vbenitez@salesianospuertomontt.cl;ybaez@salesianospuertomontt.cl;mmardones@salesianospuertomontt.cl;sgallardo@salesianospuertomontt.cl;mlagos@salesianospuertomontt.cl;earredondo@salesianospuertomontt.cl;amiranda@salesianospuertomontt.cl;alvarado@salesianospuertomontt.cl;emancilla@salesianospuertomontt.cl;pmardones@salesianospuertomontt.cl;ncarcamo@salesianospuertomontt.cl;mvillalobos@salesianospuertomontt.cl;nvargasm@salesianospuertomontt.cl;falmonacid@salesianospuertomontt.cl;cvielma@salesianospuertomontt.cl;mabarca@salesianospuertomontt.cl;demhardt@salesianospuertomontt.cl;rbustamante@salesianospuertomott.cl", "region": "LAGOS", "provincia": "LLANQUIHUE", "comuna": "PUERTO MONTT", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 2843}, {"rbd": "14602", "nombre": "COLEGIO SIGLO XXI", "telefono": "", "coordinadora": "Roc\\u00edo Vallejo", "correo": "", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "QUILPU\\u00c9", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 237}, {"rbd": "24329", "nombre": "LICEO SAN JOSE", "telefono": "61 272 2300", "coordinadora": "Teresita Del Carmen Barr\\u00eda", "correo": "encargadopie@liceosanjose.cl", "region": "MAG", "provincia": "MAGALLANES", "comuna": "PUNTA ARENAS", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1130}, {"rbd": "26272", "nombre": "COLEGIO WESTON ACADEMY", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO NORTE", "comuna": "QUILICURA", "dependencia": "PART PAGADO", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 915}, {"rbd": "1404", "nombre": "INSTITUTO RAFAEL ARIZTIA", "telefono": "", "coordinadora": "", "correo": "", "region": "VALPO", "provincia": "QUILLOTA", "comuna": "QUILLOTA", "dependencia": "PART PAGADO", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 1533}, {"rbd": "14717", "nombre": "COLEGIO LAS AMERICAS", "telefono": "(32) 282 6015", "coordinadora": "Silvia Acu\\u00f1a", "correo": "coordinacion.pie@colegiolasamericasquilpue.cl", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "QUILPU\\u00c9", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 542}, {"rbd": "15732", "nombre": "COLEGIO CRISTIANO ADONAY", "telefono": "", "coordinadora": "Carla Pelayo", "correo": "carlapelayo@gmail.com", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RANCAGUA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 473}, {"rbd": "6230", "nombre": "LICEO MUNICIPAL LA FRONTERA", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 249}, {"rbd": "15601", "nombre": "COLEGIO ANTILEN", "telefono": "", "coordinadora": "Cecilia Ivonne Montecino Silva", "correo": "cimontecinosilva@colegioantilenrengo.cl>", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1149}, {"rbd": "40114", "nombre": "LICEO ORIENTE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 907}, {"rbd": "2283", "nombre": "LICEO LUIS URBINA FLORES", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 783}, {"rbd": "15843", "nombre": "LICEO INDUSTRIAL ESTEBAN LEYTON SOTO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 722}, {"rbd": "12741", "nombre": "COLEGIO LATIONOAMERICANO LAS PARINAS", "telefono": "", "coordinadora": "", "correo": "", "region": "TPCA", "provincia": "IQUIQUE", "comuna": "IQUIQUE", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 177}, {"rbd": "2285", "nombre": "COLEGIO MANUEL FRANCISCO CORREA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 330}, {"rbd": "2292", "nombre": "ESCUELA VICENTE HUIDOBRO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 256}, {"rbd": "6225", "nombre": "ESCUELA JUAN BTA. CHESTA CH.", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 218}, {"rbd": "6227", "nombre": "ESCUELA LAS AMERICAS", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 217}, {"rbd": "2302", "nombre": "ESCUELA BASICA VICTOR NICOLETTI TAMANINI", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 200}, {"rbd": "2288", "nombre": "ESCUELA CARLOS CONDELL DE LA HAZA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 174}, {"rbd": "2296", "nombre": "COLEGIO MUNICIPAL LO CARTAGENA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 162}, {"rbd": "2293", "nombre": "COLEGIO MUNICIPAL LOS CHOAPINOS", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 90}, {"rbd": "2307", "nombre": "ESCUELA MARTA AVARIA SALVATIERRA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "CACHAPOAL", "comuna": "RENGO", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 72}, {"rbd": "14348", "nombre": "COLEGIO ESPIRITU SANTO", "telefono": "(+56) 971350815", "coordinadora": "Camila Mu\\u00f1oz Carmona", "correo": "cmunoz@espiritusanto.cl", "region": "VALPO", "provincia": "SAN ANTONIO", "comuna": "SAN ANTONIO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1079}, {"rbd": "6465", "nombre": "LICEO PART. SUBVENC. LA SIERRA", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN NORTE", "comuna": "SAAVEDRA", "dependencia": "PART SUBV", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 114}, {"rbd": "26454", "nombre": "COLEGIO SANTIAGO EMPRENDEDORES", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO SUR", "comuna": "SAN BERNARDO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "NO TIENE PIE", "matricula": 1252}, {"rbd": "9531", "nombre": "ESCUELA PARTICULAR MIGUEL DAVILA", "telefono": "", "coordinadora": "", "correo": "", "region": "RM", "provincia": "SANTIAGO CENTRO", "comuna": "PEDRO AGUIRRE CERDA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 109}, {"rbd": "25798", "nombre": "COLEGIO RELIGIOSO SANTA MARGARITA", "telefono": "56 9 3660 4652", "coordinadora": "Genesis Cubillos", "correo": "utp.pie.crsm@gmail.com", "region": "RM", "provincia": "SANTIAGO CENTRO", "comuna": "SAN MIGUEL", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 488}, {"rbd": "4656", "nombre": "ESCUELA PARTICULAR INSTITUTO SAN PEDRO", "telefono": "41-3770005", "coordinadora": "Johana Ovalle Retamal / Daniela Olavarria", "correo": "johana.ovalle@cisp.cl;daniela.olavarria@cisp.cl", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "SAN PEDRO DE LA PAZ", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 989}, {"rbd": "4677", "nombre": "ESCUELA PARTICULAR SAN JOSE", "telefono": "41) 239 0051", "coordinadora": "Andrea San Mart\\u00edn", "correo": "asanmartin@csanjose.cl", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "SAN PEDRO DE LA PAZ", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 632}, {"rbd": "2552", "nombre": "LICEO BICENTENARIO INSTITUTO POLITECNICO SANTA CRUZ", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1200}, {"rbd": "2553", "nombre": "ESCUELA LUIS OYARZUN PE\\u00d1A", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 675}, {"rbd": "2551", "nombre": "LICEO MUNICIPAL DE SANTA CRUZ", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 654}, {"rbd": "2559", "nombre": "ESCUELA MUNICIPAL DE BARREALES", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 290}, {"rbd": "2562", "nombre": "ESCUELA MUNICIPAL DE ISLA DE YAQUIL", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 208}, {"rbd": "2555", "nombre": "ESCUELA MARIA ARAYA VALDES", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 184}, {"rbd": "2556", "nombre": "ESCUELA MUNICIPAL DE PANIAHUE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 148}, {"rbd": "f", "nombre": "LICEO MUNICIPAL DE ADULTOS SANTA CRUZ", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 146}, {"rbd": "2557", "nombre": "ESCUELA GRANJA ADEODATO GARCIA VALENZUELA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 145}, {"rbd": "2565", "nombre": "ESCUELA MUNICIPAL DE MILLAHUE DE APALTA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 129}, {"rbd": "2570", "nombre": "ESCUELA MUNICIPAL DE LOS MAITENES", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 116}, {"rbd": "2577", "nombre": "ESCUELA ANGEL ARRIGORRIAGA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 89}, {"rbd": "2561", "nombre": "ESCUELA MUNICIPAL DE QUINAHUE", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 88}, {"rbd": "5752", "nombre": "ESCUELA PARTICULAR SAN PEDRO RAPA", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PADRE LAS CASAS", "dependencia": "PART SUBV", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 29}, {"rbd": "2549", "nombre": "COLEGIO LUIS ALEJANDRO ALVAREZ MU\\u00d1OZ", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 86}, {"rbd": "2563", "nombre": "ESCUELA MUNICIPAL DE LA PATAGUA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 85}, {"rbd": "2576", "nombre": "ESCUELA MUNICIPAL DE GUINDO ALTO", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 77}, {"rbd": "2560", "nombre": "ESC. MUNICIPAL LA LAJUELA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 55}, {"rbd": "2572", "nombre": "ESCUELA MUNICIPAL DE RINCON DE YAQUIL", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 45}, {"rbd": "2558", "nombre": "ESCUELA LA FINCA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 15}, {"rbd": "2568", "nombre": "ESCUELA MUNICIPAL DE PANAMA", "telefono": "", "coordinadora": "", "correo": "", "region": "LGBO", "provincia": "COLCHAGUA", "comuna": "SANTA CRUZ", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 13}, {"rbd": "6043", "nombre": "ESCUELA PARTICULAR LONCOFILO", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "CURARREHUE", "dependencia": "PART SUBV", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 13}, {"rbd": "6231", "nombre": "ESC. BASICA LOS GALPONES", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 55}, {"rbd": "3003", "nombre": "COLEGIO PIAGET", "telefono": "56 9 3388 1199, 56 9 3388 1195", "coordinadora": "Mar\\u00eda Jos\\u00e9 / Luis Gonzalez (jefe adm)", "correo": "mariajosemachuca1990@gmail.com;lgonte63@hotmail.es", "region": "MAULE", "provincia": "TALCA", "comuna": "TALCA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 793}, {"rbd": "6237", "nombre": "ESCUELA NUEVO HORIZONTE", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 45}, {"rbd": "2955", "nombre": "ESCUELA FELIPE CUBILLOS BRILLA EL SOL", "telefono": "", "coordinadora": "", "correo": "", "region": "MAULE", "provincia": "TALCA", "comuna": "TALCA", "dependencia": "MUNICIPAL", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 176}, {"rbd": "6251", "nombre": "ESCUELA RESERVA FORESTAL MAHUIDANCHI", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 43}, {"rbd": "17833", "nombre": "COLEGIO ETCHEGOYEN TALCAHUANO", "telefono": "(41)2799800", "coordinadora": "Fernanda Fritz", "correo": "coordinadorapie@etchegoyen.cl;coordinadorapiemedia@etchegoyen.cl;macarena.silva.chamorro@etchegoyen.cl", "region": "BBIO", "provincia": "CONCEPCI\\u00d3N", "comuna": "TALCAHUANO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 2427}, {"rbd": "6244", "nombre": "ESCUELA SUSANA ORTIZ", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 26}, {"rbd": "22629", "nombre": "COLEGIO LOS CONQUISTADORES", "telefono": "", "coordinadora": "Pamela Matus", "correo": "pie@losconquistadoresvaldivia.cl", "region": "RIOS", "provincia": "VALDIVIA", "comuna": "VALDIVIA", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 961}, {"rbd": "1604", "nombre": "COLEGIO LEONARDO MURIALDO", "telefono": "32 21 30 400", "coordinadora": "Carolina Y\\u00e1\\u00f1ez", "correo": "cyanez@murialdovalpo.cl", "region": "VALPO", "provincia": "VALPARA\\u00cdSO", "comuna": "VALPARA\\u00cdSO", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 1195}, {"rbd": "18220", "nombre": "COLEGIO BICENTENARIO NUEVA ESPERANZA DE YUNGAY", "telefono": "9 9455 5274 - (42) 268 1290", "coordinadora": "Mar\\u00eda Jose Guerra", "correo": "cote.guerra@cbne.cl", "region": "NUBLE", "provincia": "\\u00d1UBLE", "comuna": "YUNGAY", "dependencia": "PART SUBV", "ruralidad": "URBANO", "pie": "SI TIENE PIE", "matricula": 689}, {"rbd": "6245", "nombre": "ESCUELA EL ESFUERZO", "telefono": "", "coordinadora": "", "correo": "", "region": "ARAUC", "provincia": "CAUT\\u00cdN SUR", "comuna": "PITRUFQU\\u00c9N", "dependencia": "MUNICIPAL", "ruralidad": "RURAL", "pie": "SI TIENE PIE", "matricula": 7}]');
-var DC={'PART SUBV':'#38bdf8','MUNICIPAL':'#1a6cf5','SLEP COLCHAGUA':'#38bdf8','SLEP':'#38bdf8','PART PAGADO':'#ef4444'};
-var RC={'URBANO':'#2e82ff','RURAL':'#0d3a7a'};
-var BL=['#1a6cf5','#2e82ff','#38bdf8','#0369a1','#0d3a7a','#0c4a6e','#075985','#0ea5e9','#7dd3fc','#1e3a5f'];
-var SB=['PART SUBV','SLEP COLCHAGUA','SLEP'];
-var CH={},xR=null,xD=null,xU=null,ST='',AM=null,EC={};
-var fbDb,fbCol,fbGet,fbDoc,fbSet,fbSnap,fbDel,FBC='cepa_edits';
-var ADMIN_MODE=false;
-var DEL_TARGET=null;
-var ADMIN_PWD='CEPATECH';
+  var ctxMkt = document.getElementById('cMkt').getContext('2d');
+  charts.mkt = new Chart(ctxMkt, {
+    type: 'doughnut',
+    data: { datasets: [{ data: [0, 9617], backgroundColor: ['#38bdf8', '#162030'], borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '82%' }
+  });
 
-function HA(h,a){var r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return 'rgba('+r+','+g+','+b+','+a+')';}
-function EH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-function DC2(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
-function GCV(id){var el=document.querySelector('#'+id+' .chip.on');return el?el.dataset.v:'';}
-function BC(dep){if(SB.indexOf(dep)>-1)return 'bdg bs';if(dep==='MUNICIPAL')return 'bdg bm';if(dep==='PART PAGADO')return 'bdg bp';return 'bdg bl';}
+  var ctxT25 = document.getElementById('cT25').getContext('2d');
+  charts.t25 = new Chart(ctxT25, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: '#38bdf8', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e3050' }, ticks: { color: '#8ba3c7', font: { size: 9 } } }, y: { grid: { display: false }, ticks: { color: '#8ba3c7', font: { size: 9 } } } }, onClick: function(e, items) { if(items.length > 0) { var idx = items[0].index; openCard(charts.t25.data.rbds[idx]); } } }
+  });
 
-function GF(){
-  var rg=document.getElementById('fReg').value,cm=document.getElementById('fCom').value;
-  var dp=GCV('cDeps'),pi=GCV('cPie'),ru=GCV('cRur'),q=ST.toLowerCase();
-  return RAW.filter(function(r){
-    if(rg&&r.region!==rg)return false;
-    if(cm&&r.comuna!==cm)return false;
-    if(dp&&r.dependencia!==dp)return false;
-    if(pi&&r.pie!==pi)return false;
-    if(ru&&r.ruralidad!==ru)return false;
-    if(xR&&r.region!==xR)return false;
-    if(xD&&r.dependencia!==xD)return false;
-    if(xU&&r.ruralidad!==xU)return false;
-    if(q){var h=[r.nombre,r.region,r.provincia,r.comuna,r.dependencia,r.coordinadora,r.correo,r.telefono,r.rbd].join(' ').toLowerCase();if(h.indexOf(q)<0)return false;}
-    return true;
+  var ctxSub = document.getElementById('cSub').getContext('2d');
+  charts.sub = new Chart(ctxSub, {
+    type: 'bar',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: '#60a5fa', borderRadius: 4 }] },
+    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { color: '#1e3050' }, ticks: { color: '#8ba3c7', font: { size: 9 } } }, y: { grid: { display: false }, ticks: { color: '#8ba3c7', font: { size: 9 } } } }, onClick: function(e, items) { if(items.length > 0) { var idx = items[0].index; openCard(charts.sub.data.rbds[idx]); } } }
   });
 }
 
-function AF(){var d=GF();KPI(d);RReg(d);RDep(d);RRur(d);RMkt(d);RT25(d);RSub(d);RTbl(d);}
-
-function RMkt(d){
-  DC2('cMkt');
-  var total=9617;
-  var cepa=RAW.length;
-  var pct=Math.round(cepa/total*100*10)/10;
-  document.getElementById('mktPct').textContent=pct+'%';
-  document.getElementById('mktCepa').textContent=cepa;
-  CH['cMkt']=new Chart(document.getElementById('cMkt'),{
-    type:'doughnut',
-    data:{labels:['CEPA','Resto Chile'],datasets:[{data:[cepa,total-cepa],backgroundColor:['#1a6cf5','#1a2236'],borderWidth:0,hoverOffset:4}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'72%',
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+c.raw.toLocaleString('es-CL')+' colegios';}}}}
-    }
-  });
-}
-
-function RRur(d){
-  var mp={};d.forEach(function(r){mp[r.ruralidad]=(mp[r.ruralidad]||0)+1;});
-  var lb=Object.keys(mp),vl=lb.map(function(k){return mp[k];});
-  var tt=vl.reduce(function(a,b){return a+b;},0);
-  var bg=lb.map(function(l){return RC[l]||'#1a6cf5';});
-  // Solo actualiza el filtro cruzado, no renderiza grafico
-}
-
-function KPI(d){
-  var t=d.length,m=d.reduce(function(s,r){return s+r.matricula;},0);
-  var pi=d.filter(function(r){return r.pie==='SI TIENE PIE';}).length;
-  var sv=d.filter(function(r){return ['PART SUBV','MUNICIPAL','SLEP COLCHAGUA','SLEP'].indexOf(r.dependencia)>-1;}).length;
-  document.getElementById('kT').textContent=t.toLocaleString('es-CL');
-  document.getElementById('kM').textContent=m.toLocaleString('es-CL');
-  document.getElementById('kP').textContent=t?Math.round(m/t).toLocaleString('es-CL'):'0';
-  document.getElementById('kPi').textContent=t?Math.round(pi/t*100)+'%':'0%';
-  document.getElementById('kS').textContent=sv.toLocaleString('es-CL');
-  document.getElementById('bCnt').textContent=t+' colegios';
-}
-
-function RReg(d){
-  DC2('cReg');
-  var mp={};d.forEach(function(r){mp[r.region]=(mp[r.region]||0)+r.matricula;});
-  var en=Object.entries(mp).sort(function(a,b){return b[1]-a[1];});
-  var lb=en.map(function(e){return e[0];}),vl=en.map(function(e){return e[1];});
-  var tt=vl.reduce(function(a,b){return a+b;},0);
-  var bg=lb.map(function(_,i){return BL[i%BL.length];});
-  var cl=bg.map(function(c,i){return HA(c,xR&&lb[i]!==xR?0.2:1);});
-  var lbCopy=lb.slice(),ttCopy=tt;
-  CH['cReg']=new Chart(document.getElementById('cReg'),{
-    type:'doughnut',
-    data:{labels:lb,datasets:[{data:vl,backgroundColor:cl,borderWidth:0,hoverOffset:5}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-      onClick:function(_,el){if(!el.length){xR=null;}else{var l=lbCopy[el[0].index];xR=xR===l?null:l;}document.getElementById('bReg').textContent=xR||'Todos';AF();},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+c.raw.toLocaleString('es-CL')+' ('+Math.round(c.raw/ttCopy*100)+'%)';}}}}}
-  });
-  document.getElementById('lReg').innerHTML=lb.slice(0,8).map(function(l,i){return '<span class="leg-i" data-r="'+l+'"><span class="leg-d" style="background:'+bg[i]+'"></span>'+l+' '+Math.round(vl[i]/tt*100)+'%</span>';}).join('');
-  document.querySelectorAll('#lReg .leg-i').forEach(function(e){e.addEventListener('click',function(){xR=xR===e.dataset.r?null:e.dataset.r;document.getElementById('bReg').textContent=xR||'Todos';AF();});});
-}
-
-function RDep(d){
-  DC2('cDep');
-  var mp={};d.forEach(function(r){mp[r.dependencia]=(mp[r.dependencia]||0)+r.matricula;});
-  var lb=Object.keys(mp),vl=lb.map(function(k){return mp[k];});
-  var tt=vl.reduce(function(a,b){return a+b;},0);
-  var bg=lb.map(function(l){return DC[l]||'#1a6cf5';});
-  var cl=bg.map(function(c,i){return HA(c,xD&&lb[i]!==xD?0.2:1);});
-  var lbCopy=lb.slice(),ttCopy=tt;
-  CH['cDep']=new Chart(document.getElementById('cDep'),{
-    type:'doughnut',
-    data:{labels:lb,datasets:[{data:vl,backgroundColor:cl,borderWidth:0,hoverOffset:5}]},
-    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
-      onClick:function(_,el){if(!el.length){xD=null;}else{var l=lbCopy[el[0].index];xD=xD===l?null:l;}document.getElementById('bDep').textContent=xD||'Todos';AF();},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.label+': '+c.raw.toLocaleString('es-CL')+' ('+Math.round(c.raw/ttCopy*100)+'%)';}}}}}
-  });
-  document.getElementById('lDep').innerHTML=lb.map(function(l,i){return '<span class="leg-i" data-d="'+l+'"><span class="leg-d" style="background:'+bg[i]+'"></span>'+l+' '+Math.round(vl[i]/tt*100)+'%</span>';}).join('');
-  document.querySelectorAll('#lDep .leg-i').forEach(function(e){e.addEventListener('click',function(){xD=xD===e.dataset.d?null:e.dataset.d;document.getElementById('bDep').textContent=xD||'Todos';AF();});});
-}
-
-function RT25(d){
-  DC2('cT25');
-  var s=[].concat(d).sort(function(a,b){return b.matricula-a.matricula;}).slice(0,25);
-  var sCopy=s.slice();
-  CH['cT25']=new Chart(document.getElementById('cT25'),{
-    type:'bar',
-    data:{labels:s.map(function(r){return r.nombre.length>36?r.nombre.slice(0,34)+'...':r.nombre;}),
-          datasets:[{data:s.map(function(r){return r.matricula;}),backgroundColor:s.map(function(r){return DC[r.dependencia]||'#1a6cf5';}),borderRadius:3,borderSkipped:false}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      onClick:function(_,el){if(el.length)OM(sCopy[el[0].index]);},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.raw.toLocaleString('es-CL')+' alumnos';}}}},
-      scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a6a9a',font:{size:10},callback:function(v){return v.toLocaleString('es-CL');}}},y:{grid:{display:false},ticks:{color:'#8ba3c7',font:{size:9},autoSkip:false,maxRotation:0}}}}
-  });
-}
-
-function RSub(d){
-  DC2('cSub');
-  var s=d.filter(function(r){return SB.indexOf(r.dependencia)>-1;}).sort(function(a,b){return b.matricula-a.matricula;}).slice(0,25);
-  var sCopy=s.slice();
-  CH['cSub']=new Chart(document.getElementById('cSub'),{
-    type:'bar',
-    data:{labels:s.map(function(r){return r.nombre.length>36?r.nombre.slice(0,34)+'...':r.nombre;}),
-          datasets:[{data:s.map(function(r){return r.matricula;}),backgroundColor:'#38bdf8',borderRadius:3,borderSkipped:false}]},
-    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
-      onClick:function(_,el){if(el.length)OM(sCopy[el[0].index]);},
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return ' '+c.raw.toLocaleString('es-CL')+' alumnos';}}}},
-      scales:{x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#4a6a9a',font:{size:10},callback:function(v){return v.toLocaleString('es-CL');}}},y:{grid:{display:false},ticks:{color:'#8ba3c7',font:{size:9},autoSkip:false,maxRotation:0}}}}
-  });
-}
-
-function RTbl(d){
-  var s=[].concat(d).sort(function(a,b){return b.matricula-a.matricula;});
-  var mx=s[0]?s[0].matricula:1;
-  var tbl=document.getElementById('tbl');
-  tbl.innerHTML='<thead><tr><th>#</th><th>Colegio</th><th>Region</th><th>Comuna</th><th>Dependencia</th><th>PIE</th><th style="text-align:right">Matricula</th>'+(ADMIN_MODE?'<th style="text-align:center">Borrar</th>':'')+'</tr></thead>';
-  var tb=document.createElement('tbody');
-  s.forEach(function(r,i){
-    var tr=document.createElement('tr');
-    tr.innerHTML='<td><span class="rn">'+(i+1)+'</span></td>'+
-      '<td>'+(r.nombre.length>34?r.nombre.slice(0,32)+'...':r.nombre)+'<div class="barm" style="width:'+Math.round(r.matricula/mx*100)+'%"></div></td>'+
-      '<td>'+r.region+'</td><td>'+r.comuna+'</td>'+
-      '<td><span class="'+BC(r.dependencia)+'">'+r.dependencia+'</span></td>'+
-      '<td>'+(r.pie==='SI TIENE PIE'?'Si':'-')+'</td>'+
-      '<td style="text-align:right;color:#dde6f5">'+r.matricula.toLocaleString('es-CL')+'</td>'+
-      (ADMIN_MODE?'<td style="text-align:center"><button class="del-btn" data-rbd="'+r.rbd+'" data-nom="'+r.nombre.replace(/"/g,'')+'">&#128465;</button></td>':'');
-    tr.addEventListener('click',function(e){if(!e.target.classList.contains('del-btn'))OM(r);});
-    tb.appendChild(tr);
-  });
-  tbl.appendChild(tb);
-  // Bind delete buttons
-  document.querySelectorAll('.del-btn').forEach(function(btn){
-    btn.addEventListener('click',function(e){
-      e.stopPropagation();
-      DEL_TARGET=btn.dataset.rbd;
-      document.getElementById('delNombre').textContent=btn.dataset.nom;
-      document.getElementById('ovDel').classList.add('open');
-      document.body.style.overflow='hidden';
-    });
-  });
-}
-
-function OM(r){
-  if(!r)return;AM=r;ExEM();
-  var ed=!!EC[r.rbd];
-  document.getElementById('mrbd').textContent='RBD #'+r.rbd+(ed?' [Editado]':'');
-  document.getElementById('mname').textContent=r.nombre;
-  document.getElementById('mm').textContent=r.matricula.toLocaleString('es-CL');
-  document.getElementById('mreg').textContent=r.region;
-  document.getElementById('mcom').textContent=r.provincia+' - '+r.comuna;
-  document.getElementById('mpr').textContent=r.provincia;
-  document.getElementById('mdp').textContent=r.dependencia;
-  var co=r.coordinadora&&r.coordinadora.trim()&&r.coordinadora!=='nan';
-  document.getElementById('mco').innerHTML=co?EH(r.coordinadora.trim()):'<span class="nodata">Sin datos</span>';
-  var te=r.telefono&&r.telefono.trim()&&r.telefono!=='nan';
-  document.getElementById('mte').innerHTML=te?EH(r.telefono.trim()):'<span class="nodata">Sin datos</span>';
-  var cr=r.correo&&r.correo.trim()&&r.correo!=='nan'?r.correo.trim().split(';').map(function(e){return e.trim();}).filter(Boolean):[];
-  document.getElementById('mcr').innerHTML=cr.length?cr.map(function(e){return '<a href="mailto:'+e+'">'+e+'</a>';}).join('<br>'):'<span class="nodata">Sin datos</span>';
-  document.getElementById('mch').innerHTML='<span class="mc mc-dep">'+r.dependencia+'</span><span class="mc mc-rur">'+r.ruralidad+'</span>';
-  document.getElementById('ov').classList.add('open');
-  document.body.style.overflow='hidden';
-}
-
-function CM(){document.getElementById('ov').classList.remove('open');document.body.style.overflow='';AM=null;ExEM();}
-
-function ExEM(){
-  document.getElementById('eb').classList.remove('on');
-  document.getElementById('med').style.display='inline-block';
-  document.getElementById('msv').style.display='none';
-  document.querySelectorAll('.einp-w').forEach(function(e){e.style.display='none';});
-  document.querySelectorAll('.fval').forEach(function(e){e.style.display='';});
-}
-
-function EnEM(){
-  document.getElementById('eb').classList.add('on');
-  document.getElementById('med').style.display='none';
-  document.getElementById('msv').style.display='inline-block';
-  document.getElementById('eco').value=AM.coordinadora&&AM.coordinadora!=='nan'?AM.coordinadora:'';
-  document.getElementById('ete').value=AM.telefono&&AM.telefono!=='nan'?AM.telefono:'';
-  document.getElementById('ecr').value=AM.correo&&AM.correo!=='nan'?AM.correo:'';
-  document.querySelectorAll('.einp-w').forEach(function(e){e.style.display='flex';});
-  document.querySelectorAll('.fval').forEach(function(e){e.style.display='none';});
-}
-
-function SV(){
-  if(!AM)return;
-  var rbd=AM.rbd;
-  var dt={coordinadora:document.getElementById('eco').value.trim(),telefono:document.getElementById('ete').value.trim(),correo:document.getElementById('ecr').value.trim()};
-  var r=RAW.find(function(x){return x.rbd===rbd;});
-  if(r)Object.assign(r,dt);
-  EC[rbd]=dt;
-  try{localStorage.setItem('cepa_e',JSON.stringify(EC));}catch(e){}
-  if(fbDb){fbSet(fbDoc(fbDb,FBC,rbd),dt).catch(function(){});}
-  OM(r);toast('Guardado correctamente');
-}
-
-function EXP(){
-  var hd=['rbd','nombre','telefono','coordinadora','correo','region','provincia','comuna','dependencia','ruralidad','pie','matricula'];
-  var rows=[hd.join(',')];
-  RAW.forEach(function(r){rows.push(hd.map(function(h){var v=String(r[h]!=null?r[h]:'').replace(/"/g,'""');return v.indexOf(',')>-1||v.indexOf('"')>-1?'"'+v+'"':v;}).join(','));});
-  var b=new Blob([rows.join('\n')],{type:'text/csv;charset=utf-8'});
-  var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download='CEPA_actualizado.csv';a.click();URL.revokeObjectURL(u);
-  toast('CSV exportado');
-}
-
-function toast(msg){
-  var t=document.getElementById('_t');
-  if(!t){t=document.createElement('div');t.id='_t';t.style.cssText='position:fixed;bottom:20px;right:20px;background:#1a6cf5;color:#fff;padding:9px 16px;border-radius:8px;font-size:12px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.4);font-family:sans-serif';document.body.appendChild(t);}
-  t.innerHTML=msg;t.style.opacity='1';clearTimeout(t._t);t._t=setTimeout(function(){t.style.opacity='0';},2800);
-}
-
-function popCom(rf){
-  var sel=document.getElementById('fCom'),pv=sel.value;
-  sel.innerHTML='<option value="">Todas</option>';
-  var src=rf?RAW.filter(function(r){return r.region===rf;}):RAW;
-  var cs=src.map(function(r){return r.comuna;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort();
-  cs.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
-  for(var i=0;i<sel.options.length;i++){if(sel.options[i].value===pv){sel.value=pv;break;}}
-}
-
-function rst(){
-  document.getElementById('fReg').value='';document.getElementById('fCom').value='';popCom();
-  ['cDeps','cPie','cRur'].forEach(function(id){
-    document.querySelectorAll('#'+id+' .chip').forEach(function(c){c.classList.remove('on');});
-    document.querySelector('#'+id+' .chip').classList.add('on');
-  });
-  xR=null;xD=null;xU=null;ST='';
-  document.getElementById('si').value='';document.getElementById('sx').classList.remove('on');
-  AF();
-}
-
-async function initFB(){
-  try{
-    var m1=await import('https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js');
-    var m2=await import('https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js');
-    var app=m1.initializeApp({apiKey:'AIzaSyBFT9jMhbN3zcILmKSghCuUf9paL3jFnLU',authDomain:'cepa-dashboard.firebaseapp.com',projectId:'cepa-dashboard',storageBucket:'cepa-dashboard.firebasestorage.app',messagingSenderId:'413720796219',appId:'1:413720796219:web:8884807d38840904e5901e'});
-    fbDb=m2.getFirestore(app);fbCol=m2.collection;fbGet=m2.getDocs;fbDoc=m2.doc;fbSet=m2.setDoc;fbSnap=m2.onSnapshot;fbDel=m2.deleteDoc;
-    var sn=await fbGet(fbCol(fbDb,FBC));
-    sn.forEach(function(d){EC[d.id]=d.data();var r=RAW.find(function(x){return x.rbd===d.id;});if(r)Object.assign(r,d.data());});
-    // Cargar colegios nuevos agregados desde el dashboard
-    var snNuevos=await fbGet(fbCol(fbDb,'cepa_nuevos'));
-    snNuevos.forEach(function(d){if(!RAW.find(function(x){return x.rbd===d.id;})){RAW.push(d.data());if(lastAdded.indexOf(d.id)<0)lastAdded.push(d.id);}});
-    AF();updateLastColegios();toast('Sincronizado con la nube');
-    fbSnap(fbCol(fbDb,FBC),function(sn){sn.docChanges().forEach(function(c){if(c.type!=='removed'){EC[c.doc.id]=c.doc.data();var r=RAW.find(function(x){return x.rbd===c.doc.id;});if(r)Object.assign(r,c.doc.data());}else delete EC[c.doc.id];});AF();});
-    // Escuchar nuevos colegios en tiempo real
-    fbSnap(fbCol(fbDb,'cepa_nuevos'),function(sn){
-      sn.docChanges().forEach(function(c){
-        if(c.type==='added'&&!RAW.find(function(x){return x.rbd===c.doc.id;})){
-          RAW.push(c.doc.data());
-          if(lastAdded.indexOf(c.doc.id)<0)lastAdded.push(c.doc.id);
-        }
-        if(c.type==='removed'){
-          var idx=RAW.findIndex(function(x){return x.rbd===c.doc.id;});
-          if(idx>-1)RAW.splice(idx,1);
-        }
-      });
-      AF();updateLastColegios();
-    });
-  }catch(e){console.warn('Firebase no disponible');} 
-}
-
-// Sidebar
-var rs=document.getElementById('fReg');
-RAW.map(function(r){return r.region;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort().forEach(function(v){var o=document.createElement('option');o.value=v;o.textContent=v;rs.appendChild(o);});
-popCom();
-var dw=document.getElementById('cDeps');
-var a0=document.createElement('span');a0.className='chip on';a0.dataset.v='';a0.textContent='Todos';dw.appendChild(a0);
-RAW.map(function(r){return r.dependencia;}).filter(function(v,i,a){return a.indexOf(v)===i;}).sort().forEach(function(d){var c=document.createElement('span');c.className='chip';c.dataset.v=d;c.textContent=d;dw.appendChild(c);});
-dw.querySelectorAll('.chip').forEach(function(c){c.addEventListener('click',function(){dw.querySelectorAll('.chip').forEach(function(x){x.classList.remove('on');});c.classList.add('on');AF();});});
-['cPie','cRur'].forEach(function(id){document.querySelectorAll('#'+id+' .chip').forEach(function(c){c.addEventListener('click',function(){document.querySelectorAll('#'+id+' .chip').forEach(function(x){x.classList.remove('on');});c.classList.add('on');AF();});});});
-document.getElementById('fReg').addEventListener('change',function(){popCom(document.getElementById('fReg').value||null);AF();});
-document.getElementById('fCom').addEventListener('change',AF);
-document.getElementById('si').addEventListener('input',function(e){ST=e.target.value;document.getElementById('sx').classList.toggle('on',ST.length>0);AF();});
-document.getElementById('sx').addEventListener('click',function(){ST='';document.getElementById('si').value='';document.getElementById('sx').classList.remove('on');AF();});
-document.getElementById('btnRst').addEventListener('click',rst);
-document.getElementById('btnRst2').addEventListener('click',rst);
-document.getElementById('mc1').addEventListener('click',CM);
-document.getElementById('mc2').addEventListener('click',CM);
-document.getElementById('ov').addEventListener('click',function(e){if(e.target===document.getElementById('ov'))CM();});
-document.getElementById('med').addEventListener('click',EnEM);
-document.getElementById('msv').addEventListener('click',SV);
-document.getElementById('mexp').addEventListener('click',EXP);
-document.getElementById('mfr').addEventListener('click',function(){if(AM){document.getElementById('fReg').value=AM.region;popCom(AM.region);CM();AF();}});
-document.addEventListener('keydown',function(e){if(e.key==='Escape'){CM();closeNew();}});
-document.getElementById('hdate').textContent=new Date().toLocaleDateString('es-CL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
-// NUEVO COLEGIO
-function openNew(){
-  document.getElementById('ovNew').classList.add('open');
-  document.body.style.overflow='hidden';
-  ['nRbd','nMat','nNom','nProv','nCom','nCoord','nTel','nCorr'].forEach(function(id){document.getElementById(id).value='';});
-  document.getElementById('nReg').value='';
-  document.getElementById('nDep').value='';
-  document.getElementById('nRur').value='URBANO';
-  document.getElementById('nPie').value='SI TIENE PIE';
-  document.getElementById('nErr').style.display='none';
-}
-function closeNew(){
-  document.getElementById('ovNew').classList.remove('open');
-  document.body.style.overflow='';
-}
-async function saveNew(){
-  var rbd=document.getElementById('nRbd').value.trim();
-  var nom=document.getElementById('nNom').value.trim();
-  var reg=document.getElementById('nReg').value;
-  var com=document.getElementById('nCom').value.trim();
-  var dep=document.getElementById('nDep').value;
-  var err=document.getElementById('nErr');
-  if(!rbd||!nom||!reg||!com||!dep){
-    err.style.display='block';err.textContent='Los campos RBD, Nombre, Region, Comuna y Dependencia son obligatorios.';return;
-  }
-  if(RAW.find(function(x){return x.rbd===rbd;})){
-    err.style.display='block';err.textContent='Ya existe un colegio con RBD: '+rbd;return;
-  }
-  var nuevo={
-    rbd:rbd,nombre:nom,region:reg,
-    provincia:document.getElementById('nProv').value.trim(),
-    comuna:com,dependencia:dep,
-    ruralidad:document.getElementById('nRur').value,
-    pie:document.getElementById('nPie').value,
-    matricula:parseInt(document.getElementById('nMat').value)||0,
-    coordinadora:document.getElementById('nCoord').value.trim(),
-    telefono:document.getElementById('nTel').value.trim(),
-    correo:document.getElementById('nCorr').value.trim(),
-    pace:'SIN PROGRAMA'
-  };
-  RAW.push(nuevo);
-  if(fbDb){try{await fbSet(fbDoc(fbDb,'cepa_nuevos',rbd),nuevo);}catch(e){}}
-  try{var nv=JSON.parse(localStorage.getItem('cepa_nuevos')||'[]');nv.push(nuevo);localStorage.setItem('cepa_nuevos',JSON.stringify(nv));}catch(e){}
-  closeNew();
-  // Agregar a lista de ultimos
-  if(lastAdded.indexOf(rbd)<0) lastAdded.push(rbd);
-  if(lastAdded.length>5) lastAdded.shift();
-  // Agregar region al select si no existe
-  var rs2=document.getElementById('fReg');
-  if(![].slice.call(rs2.options).some(function(o){return o.value===reg;})){
-    var o2=document.createElement('option');o2.value=reg;o2.textContent=reg;rs2.appendChild(o2);
-  }
-  popCom();
-  AF();
-  updateLastColegios();
-  toast('Colegio "'+nom+'" agregado');
-}
-var lastAdded=[];
-// Cargar ultimos ingresados desde localStorage al arrancar
-try{
-  var _nv=JSON.parse(localStorage.getItem('cepa_nuevos')||'[]');
-  _nv.forEach(function(r){if(lastAdded.indexOf(r.rbd)<0)lastAdded.push(r.rbd);});
-}catch(e){}
-
-function updateLastColegios(){
-  var wrap=document.getElementById('lastColegios');
-  var toShow=[];
-  try{
-    var nv=JSON.parse(localStorage.getItem('cepa_nuevos')||'[]');
-    toShow=nv.slice(-5).reverse();
-  }catch(e){}
-  if(!toShow.length){
-    wrap.innerHTML='<div style="font-size:11px;color:var(--tx3)">Sin registros recientes</div>';
+// SINCRONIZACIÓN AUTOMÁTICA EN TIEMPO REAL CON FIREBASE
+function iniciarEscuchaFirebase() {
+  if (!window.fbSnap || !window.fbDb) {
+    setTimeout(iniciarEscuchaFirebase, 200);
     return;
   }
-  var html='';
-  for(var i=0;i<toShow.length;i++){
-    html+='<div class="last-col-item" data-idx="'+i+'" style="display:flex;align-items:center;gap:7px;padding:7px 6px;border-bottom:1px solid var(--bor);cursor:pointer;border-radius:5px">'+
-      '<span style="font-size:10px;color:var(--tx3);font-weight:700;width:14px;flex-shrink:0">'+(i+1)+'</span>'+
-      '<span style="font-size:11px;color:var(--wh);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+toShow[i].nombre+'</span>'+
-      '</div>';
-  }
-  wrap.innerHTML=html;
-  var divs=wrap.querySelectorAll('.last-col-item');
-  for(var j=0;j<divs.length;j++){
-    (function(colegio){
-      var el=wrap.querySelector('[data-idx="'+j+'"]');
-      el.addEventListener('click',function(){
-        // Buscar en RAW por rbd, si no existe usar el objeto directo
-        var r=RAW.find(function(x){return x.rbd===colegio.rbd;})||colegio;
-        OM(r);
+
+  window.fbSnap(window.fbCol(window.fbDb, FBC), function(snapshot) {
+    RAW = [];
+    snapshot.forEach(function(docSnap) {
+      var d = docSnap.data();
+      RAW.push({
+        id_firebase: docSnap.id,
+        rbd: d.rbd ? String(d.rbd) : docSnap.id,
+        nombre: d.nombre || "Sin Nombre",
+        region: d.region || "",
+        provincia: d.provincia || "",
+        comuna: d.comuna || "",
+        dependencia: d.dependencia || "",
+        ruralidad: d.ruralidad || "",
+        pie: d.pie || "",
+        coordinadora: d.coordinadora || "",
+        telefono: d.telefono || "",
+        correo: d.correo || "",
+        matricula: parseInt(d.matricula) || 0
       });
-      el.addEventListener('mouseover',function(){this.style.background='rgba(26,108,245,.1)';});
-      el.addEventListener('mouseout',function(){this.style.background='';});
-    })(toShow[j]);
-  }
+    });
+
+    // Rellenar selectores dinámicos la primera vez
+    var regSel = document.getElementById('fReg');
+    if(regSel && regSel.options.length <= 1) {
+      var regs = [...new Set(RAW.map(x => x.region))].filter(Boolean).sort();
+      regs.forEach(r => { var o = document.createElement('option'); o.text = r; o.value = r; regSel.add(o); });
+      
+      var depDiv = document.getElementById('cDeps');
+      var deps = [...new Set(RAW.map(x => x.dependencia))].filter(Boolean).sort();
+      depDiv.innerHTML = '<span class="chip on" data-v="">Todos</span>';
+      deps.forEach(d => { depDiv.innerHTML += '<span class="chip" data-v="'+d+'">'+d+'</span>'; });
+      addChipEvents();
+    }
+
+    AF(); // Procesar y actualizar interfaz
+    actualizarUltimosIngresados();
+  });
 }
-document.getElementById('btnAdmin').addEventListener('click',function(){
-  if(ADMIN_MODE){
-    ADMIN_MODE=false;
-    document.getElementById('btnAdmin').classList.remove('on');
-    document.getElementById('btnAdmin').textContent='\uD83D\uDD74 Admin';
-    AF();toast('Modo admin desactivado');
-  } else {
-    document.getElementById('adminPwd').value='';
-    document.getElementById('adminErr').style.display='none';
-    document.getElementById('ovAdmin').classList.add('open');
-    document.body.style.overflow='hidden';
-    setTimeout(function(){document.getElementById('adminPwd').focus();},100);
+
+// PROCESADOR DE FILTROS Y RENDERS (AF)
+function AF() {
+  var s = document.getElementById('si').value.toLowerCase().trim();
+  var fr = document.getElementById('fReg').value;
+  var fc = document.getElementById('fCom').value;
+  
+  var fd = '';
+  var activeDepChip = document.querySelector('#cDeps .chip.on');
+  if(activeDepChip) fd = activeDepChip.getAttribute('data-v');
+
+  var fp = '';
+  var activePieChip = document.querySelector('#cPie .chip.on');
+  if(activePieChip) fp = activePieChip.getAttribute('data-v');
+
+  var fu = '';
+  var activeRurChip = document.querySelector('#cRur .chip.on');
+  if(activeRurChip) fu = activeRurChip.getAttribute('data-v');
+
+  // Filtrado de Datos
+  var filtered = RAW.filter(function(x) {
+    if(fr && x.region !== fr) return false;
+    if(fc && x.comuna !== fc) return false;
+    if(fd && x.dependencia !== fd) return false;
+    if(fp && x.pie !== fp) return false;
+    if(fu && x.ruralidad !== fu) return false;
+    if(s) {
+      var match = (x.rbd.toLowerCase().includes(s) || x.nombre.toLowerCase().includes(s) || x.region.toLowerCase().includes(s) || x.comuna.toLowerCase().includes(s));
+      if(!match) return false;
+    }
+    return true;
+  });
+
+  // KPI calculations
+  var total = filtered.length;
+  var totalMat = filtered.reduce((a,b)=>a+b.matricula, 0);
+  var avg = total ? Math.round(totalMat/total) : 0;
+  var conPie = filtered.filter(x => x.pie === "SI TIENE PIE").length;
+  var pctPie = total ? Math.round((conPie/total)*100) : 0;
+  var subv = filtered.filter(x => ["PART SUBV","MUNICIPAL","SLEP","SLEP COLCHAGUA"].includes(x.dependencia)).length;
+
+  document.getElementById('kT').innerText = total.toLocaleString();
+  document.getElementById('kM').innerText = totalMat.toLocaleString();
+  document.getElementById('kP').innerText = avg.toLocaleString();
+  document.getElementById('kPi').innerText = pctPie + "%";
+  document.getElementById('kS').innerText = subv.toLocaleString();
+  document.getElementById('bCnt').innerText = total;
+
+  // Actualizar insignias de cabecera de tarjetas
+  document.getElementById('bReg').innerText = fr || "Todos";
+  document.getElementById('bDep').innerText = fd || "Todos";
+
+  // Actualizar Gráfico de Regiones
+  var regMap = {};
+  filtered.forEach(x => { regMap[x.region] = (regMap[x.region]||0) + x.matricula; });
+  var regSorted = Object.entries(regMap).sort((a,b)=>b[1]-a[1]);
+  charts.reg.data.labels = regSorted.map(x => x[0]);
+  charts.reg.data.datasets[0].data = regSorted.map(x => x[1]);
+  charts.reg.update();
+
+  // Actualizar Gráfico de Dependencia
+  var depMap = {};
+  filtered.forEach(x => { depMap[x.dependencia] = (depMap[x.dependencia]||0) + 1; });
+  var depSorted = Object.entries(depMap).sort((a,b)=>b[1]-a[1]);
+  charts.dep.data.labels = depSorted.map(x => x[0]);
+  charts.dep.data.datasets[0].data = depSorted.map(x => x[1]);
+  charts.dep.update();
+
+  // Gráfico Penetracion de Mercado
+  var cepaCount = RAW.length;
+  var mktPct = ((cepaCount / 9617) * 100).toFixed(2);
+  document.getElementById('mktPct').innerText = mktPct + "%";
+  document.getElementById('mktCepa').innerText = cepaCount;
+  charts.mkt.data.datasets[0].data = [cepaCount, Math.max(0, 9617 - cepaCount)];
+  charts.mkt.update();
+
+  // Top 25 Matricula
+  var t25Data = [...filtered].sort((a,b)=>b.matricula-a.matricula).slice(0, 25);
+  charts.t25.data.labels = t25Data.map(x => x.nombre.substring(0,18));
+  charts.t25.data.datasets[0].data = t25Data.map(x => x.matricula);
+  charts.t25.data.rbds = t25Data.map(x => x.rbd);
+  charts.t25.update();
+
+  // Top 25 Subvencionados
+  var subData = filtered.filter(x => ["PART SUBV","SLEP","SLEP COLCHAGUA"].includes(x.dependencia)).sort((a,b)=>b.matricula-a.matricula).slice(0, 25);
+  charts.sub.data.labels = subData.map(x => x.nombre.substring(0,18));
+  charts.sub.data.datasets[0].data = subData.map(x => x.matricula);
+  charts.sub.data.rbds = subData.map(x => x.rbd);
+  charts.sub.update();
+
+  // Renderizado de la Tabla Principal
+  var html = '<thead><tr><th>RBD</th><th>Establecimiento</th><th>Regi&oacute;n</th><th>Comuna</th><th>Dependencia</th><th>Matr&iacute;cula</th>';
+  if(isA) html += '<th>Acciones</th>';
+  html += '</tr></thead><tbody>';
+
+  filtered.forEach(function(x) {
+    var bCls = 'bl';
+    if(x.dependencia==='MUNICIPAL') bCls='bm';
+    else if(x.dependencia==='PART SUBV') bCls='bs';
+    else if(x.dependencia==='PART PAGADO') bCls='bp';
+
+    html += '<tr onclick="openCard(\''+x.rbd+'\')">'+
+      '<td><span class="rn">'+x.rbd+'</span></td>'+
+      '<td><div style="font-weight:500;color:var(--wh)">'+x.nombre+'</div><div class="barm" style="width:'+Math.min(100, (x.matricula/30))+'px"></div></td>'+
+      '<td>'+x.region+'</td>'+
+      '<td>'+x.comuna+'</td>'+
+      '<td><span class="bdg '+bCls+'">'+x.dependencia+'</span></td>'+
+      '<td style="font-weight:600;color:var(--wh)">'+x.matricula.toLocaleString()+'</td>';
+    if(isA) {
+      html += '<td onclick="event.stopPropagation()"><button class="del-btn" onclick="openDel(\''+x.rbd+'\')">&#128465;</button></td>';
+    }
+    html += '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('tbl').innerHTML = html;
+}
+
+// MANEJO DE HISTORIAL RECIENTE
+function actualizarUltimosIngresados() {
+  var ultimos = [...RAW].slice(-3).reverse();
+  var container = document.getElementById('lastColegios');
+  if(!container) return;
+  container.innerHTML = '';
+  
+  ultimos.forEach(x => {
+    container.innerHTML += '<div class="last-item" onclick="openCard(\''+x.rbd+'\')">'+
+      '<div class="last-name">'+x.nombre+'</div>'+
+      '<div class="last-meta"><span>RBD '+x.rbd+'</span><span class="last-badge">'+x.matricula+' al.</span></div>'+
+    '</div>';
+  });
+}
+
+// CONTROL DE MODAL DETALLE / EDITAR
+function openCard(rbd) {
+  var x = RAW.find(q => q.rbd === rbd);
+  if(!x) return;
+  cS = x;
+
+  document.getElementById('mrbd').innerText = "RBD " + x.rbd;
+  document.getElementById('mname').innerText = x.nombre;
+  document.getElementById('mm').innerText = x.matricula.toLocaleString();
+  document.getElementById('mreg').innerText = x.region;
+  document.getElementById('mcom').innerText = x.comuna;
+  document.getElementById('mco').innerText = x.coordinadora || '-';
+  document.getElementById('mte').innerText = x.telefono || '-';
+  document.getElementById('mcr').innerHTML = x.correo ? '<a href="mailto:'+x.correo+'">'+x.correo+'</a>' : '-';
+  document.getElementById('mpr').innerText = x.provincia || '-';
+  document.getElementById('mdp').innerText = x.dependencia || '-';
+
+  var ch = document.getElementById('mch');
+  ch.innerHTML = '<span class="mc mc-dep">'+x.dependencia+'</span>'+
+                 '<span class="mc mc-rur">'+x.ruralidad+'</span>'+
+                 '<span class="mc" style="background:var(--sur2);color:var(--tx2)">'+x.pie+'</span>';
+
+  // Ocultar inputs si estaba en edición
+  document.getElementById('eb').classList.remove('on');
+  ['co','te','cr'].forEach(id => {
+    document.getElementById('m'+id).style.display = 'block';
+    document.getElementById('w'+id).style.display = 'none';
+  });
+  document.getElementById('msv').style.display = 'none';
+  document.getElementById('med').style.display = 'inline-block';
+
+  document.getElementById('ov').classList.add('open');
+}
+
+function closeCard() { document.getElementById('ov').classList.remove('open'); cS = null; }
+
+// ACTIVAR MODO EDICIÓN EN FICHA
+document.getElementById('med').addEventListener('click', function() {
+  if(!cS) return;
+  document.getElementById('eb').classList.add('on');
+  document.getElementById('med').style.display = 'none';
+  document.getElementById('msv').style.display = 'inline-block';
+
+  ['co','te','cr'].forEach(id => {
+    document.getElementById('m'+id).style.display = 'none';
+    document.getElementById('w'+id).style.display = 'flex';
+  });
+
+  document.getElementById('eco').value = cS.coordinadora || '';
+  document.getElementById('ete').value = cS.telefono || '';
+  document.getElementById('ecr').value = cS.correo || '';
+});
+
+// ACCIÓN: ACTUALIZAR REGISTRO EXISTENTE
+document.getElementById('msv').addEventListener('click', async function() {
+  if(!cS || !window.fbUpd || !window.fbDoc) return;
+
+  var updData = {
+    coordinadora: document.getElementById('eco').value,
+    telefono: document.getElementById('ete').value,
+    correo: document.getElementById('ecr').value
+  };
+
+  try {
+    var dRef = window.fbDoc(window.fbDb, FBC, cS.id_firebase);
+    await window.fbUpd(dRef, updData);
+    closeCard();
+  } catch(e) {
+    alert("Error al actualizar: " + e.message);
   }
 });
-function closeAdmin(){document.getElementById('ovAdmin').classList.remove('open');document.body.style.overflow='';}
-function checkAdmin(){
-  if(document.getElementById('adminPwd').value===ADMIN_PWD){
-    ADMIN_MODE=true;
-    closeAdmin();
-    document.getElementById('btnAdmin').classList.add('on');
-    document.getElementById('btnAdmin').textContent='\uD83D\uDD13 Admin ON';
-    AF();toast('Modo admin activado');
+
+// CONTROL DE MODAL NUEVO COLEGIO
+function openNew() { 
+  document.getElementById('nErr').style.display = 'none';
+  document.getElementById('ovNew').classList.add('open'); 
+}
+function closeNew() { document.getElementById('ovNew').classList.remove('open'); }
+
+// ACCIÓN: AGREGAR NUEVO COLEGIO A FIREBASE
+async function saveNew() {
+  if(!window.fbAdd || !window.fbCol) return;
+
+  var rbdVal = document.getElementById('nRbd').value.trim();
+  var nomVal = document.getElementById('nNom').value.trim();
+  var regVal = document.getElementById('nReg').value;
+  var comVal = document.getElementById('nCom').value.trim();
+  var depVal = document.getElementById('nDep').value;
+
+  if(!rbdVal || !nomVal || !regVal || !comVal || !depVal) {
+    var err = document.getElementById('nErr');
+    err.innerText = "Por favor completa todos los campos obligatorios (*)";
+    err.style.display = 'block';
+    return;
+  }
+
+  var nuevo = {
+    rbd: rbdVal,
+    nombre: nomVal.toUpperCase(),
+    matricula: parseInt(document.getElementById('nMat').value) || 0,
+    region: regVal,
+    provincia: document.getElementById('nProv').value.trim().toUpperCase(),
+    comuna: comVal.toUpperCase(),
+    dependencia: depVal,
+    ruralidad: document.getElementById('nRur').value,
+    pie: document.getElementById('nPie').value,
+    coordinadora: document.getElementById('nCoord').value.trim(),
+    telefono: document.getElementById('nTel').value.trim(),
+    correo: document.getElementById('nCorr').value.trim()
+  };
+
+  try {
+    await window.fbAdd(window.fbCol(window.fbDb, FBC), nuevo);
+    closeNew();
+    
+    // Limpiar inputs
+    ['nRbd','nMat','nNom','nReg','nProv','nCom','nDep','nCoord','nTel','nCorr'].forEach(id => {
+      var el = document.getElementById(id); if(el) el.value = (el.tagName === 'SELECT') ? '' : '';
+    });
+  } catch(e) {
+    alert("Error al guardar: " + e.message);
+  }
+}
+
+// CONTROL DE MODAL ADMINISTRADOR
+document.getElementById('btnAdmin').addEventListener('click', function() {
+  if(isA) {
+    isA = false;
+    this.classList.remove('on');
+    this.innerHTML = '&#128274; Admin';
+    AF();
   } else {
-    document.getElementById('adminErr').style.display='block';
-    document.getElementById('adminPwd').value='';
-    document.getElementById('adminPwd').focus();
+    document.getElementById('adminErr').style.display = 'none';
+    document.getElementById('adminPwd').value = '';
+    document.getElementById('ovAdmin').classList.add('open');
+  }
+});
+
+document.getElementById('btnAdminOk').addEventListener('click', function() {
+  var pwd = document.getElementById('adminPwd').value;
+  if(pwd === "cepa2024" || pwd === "admin") { 
+    isA = true;
+    var btn = document.getElementById('btnAdmin');
+    btn.classList.add('on');
+    btn.innerHTML = '&#128275; Salir Admin';
+    document.getElementById('ovAdmin').classList.remove('open');
+    AF();
+  } else {
+    document.getElementById('adminErr').style.display = 'block';
+  }
+});
+
+// CONTROL DE MODAL ELIMINAR COLEGIO
+var rbdParaBorrar = null;
+function openDel(rbd) {
+  var x = RAW.find(q => q.rbd === rbd);
+  if(!x) return;
+  rbdParaBorrar = rbd;
+  document.getElementById('delNombre').innerText = x.nombre;
+  document.getElementById('ovDel').classList.add('open');
+}
+function closeDel() { document.getElementById('ovDel').classList.remove('open'); rbdParaBorrar = null; }
+
+async function confirmDel() {
+  if(!rbdParaBorrar || !window.fbDel || !window.fbDoc) return;
+  var x = RAW.find(q => q.rbd === rbdParaBorrar);
+  if(!x) return;
+
+  try {
+    var dRef = window.fbDoc(window.fbDb, FBC, x.id_firebase);
+    await window.fbDel(dRef);
+    closeDel();
+  } catch(e) {
+    alert("Error al eliminar: " + e.message);
   }
 }
-document.getElementById('mcAdmin').addEventListener('click',closeAdmin);
-document.getElementById('mcAdmin2').addEventListener('click',closeAdmin);
-document.getElementById('btnAdminOk').addEventListener('click',checkAdmin);
-document.getElementById('adminPwd').addEventListener('keydown',function(e){if(e.key==='Enter')checkAdmin();});
 
-function closeDel(){document.getElementById('ovDel').classList.remove('open');document.body.style.overflow='';DEL_TARGET=null;}
-async function confirmDel(){
-  if(!DEL_TARGET)return;
-  var rbd=DEL_TARGET;
-  // Remove from RAW
-  var idx=RAW.findIndex(function(x){return x.rbd===rbd;});
-  if(idx>-1)RAW.splice(idx,1);
-  // Remove from Firebase
-  if(fbDb&&fbDel){
-    try{await fbDel(fbDoc(fbDb,FBC,rbd));}catch(e){}
-    try{await fbDel(fbDoc(fbDb,'cepa_nuevos',rbd));}catch(e){}
-  }
-  // Remove from localStorage
-  try{
-    var nv=JSON.parse(localStorage.getItem('cepa_nuevos')||'[]');
-    nv=nv.filter(function(x){return x.rbd!==rbd;});
-    localStorage.setItem('cepa_nuevos',JSON.stringify(nv));
-    var ec=JSON.parse(localStorage.getItem('cepa_e')||'{}');
-    delete ec[rbd];
-    localStorage.setItem('cepa_e',JSON.stringify(ec));
-  }catch(e){}
-  closeDel();
+// EXPORTAR FICHA INDIVIDUAL A CSV
+document.getElementById('mexp').addEventListener('click', function() {
+  if(!cS) return;
+  var csv = "Campo,Valor\n"+
+    "RBD,"+cS.rbd+"\n"+
+    "Nombre,\""+cS.nombre+"\"\n"+
+    "Matricula,"+cS.matricula+"\n"+
+    "Region,"+cS.region+"\n"+
+    "Comuna,"+cS.comuna+"\n"+
+    "Dependencia,"+cS.dependencia+"\n"+
+    "Coordinadora,\""+cS.coordinadora+"\"\n"+
+    "Telefono,"+cS.telefono+"\n"+
+    "Correo,"+cS.correo+"\n";
+  
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", "RBD_"+cS.rbd+".csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+});
+
+// CHIPS DE FILTRO DE ASIDE
+function toggleChip(divId, val) {
+  var chips = document.querySelectorAll('#'+divId+' .chip');
+  chips.forEach(c => {
+    if(c.getAttribute('data-v') === val) c.classList.add('on');
+    else c.classList.remove('on');
+  });
   AF();
-  toast('Colegio eliminado');
 }
-document.getElementById('mcDel').addEventListener('click',closeDel);
-document.getElementById('mcDel2').addEventListener('click',closeDel);
-document.getElementById('btnConfirmDel').addEventListener('click',confirmDel);
-document.getElementById('ovDel').addEventListener('click',function(e){if(e.target===document.getElementById('ovDel'))closeDel();});
-document.getElementById('mcNew').addEventListener('click',closeNew);
-document.getElementById('mcNew2').addEventListener('click',closeNew);
-document.getElementById('btnSaveNew').addEventListener('click',saveNew);
-document.getElementById('btnAdd').addEventListener('click',openNew);
-document.getElementById('ovNew').addEventListener('click',function(e){if(e.target===document.getElementById('ovNew'))closeNew();});
 
-Chart.defaults.color='#4a6a9a';
-Chart.defaults.font.family="'DM Sans',sans-serif";
-window.OM=OM;
-window.RAW=RAW;
-AF();
-updateLastColegios();
-initFB();
+function addChipEvents() {
+  document.querySelectorAll('.chips .chip').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      var p = this.parentNode;
+      p.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+      this.classList.add('on');
+      AF();
+    });
+  });
+}
+
+// ENLAZAR EVENTOS DE ENTRADAS Y SELECTORES
+document.getElementById('si').addEventListener('input', function() {
+  document.getElementById('sx').classList.toggle('on', this.value.length > 0);
+  AF();
+});
+document.getElementById('sx').addEventListener('click', function() {
+  document.getElementById('si').value = '';
+  this.classList.remove('on');
+  AF();
+});
+
+document.getElementById('fReg').addEventListener('change', function() {
+  var fr = this.value;
+  var comSel = document.getElementById('fCom');
+  comSel.innerHTML = '<option value="">Todas</option>';
+  
+  if(fr) {
+    var comunas = [...new Set(RAW.filter(x => x.region === fr).map(x => x.comuna))].filter(Boolean).sort();
+    comunas.forEach(c => { var o = document.createElement('option'); o.text = c; o.value = c; comSel.add(o); });
+  }
+  AF();
+});
+document.getElementById('fCom').addEventListener('change', AF);
+
+// BOTÓN: FILTRAR REGION DESDE MODAL
+document.getElementById('mfr').addEventListener('click', function() {
+  if(!cS) return;
+  document.getElementById('fReg').value = cS.region;
+  document.getElementById('fReg').dispatchEvent(new Event('change'));
+  closeCard();
+});
+
+// REINICIAR FILTROS
+function limpiarTodo() {
+  document.getElementById('si').value = '';
+  document.getElementById('sx').classList.remove('on');
+  document.getElementById('fReg').value = '';
+  document.getElementById('fCom').innerHTML = '<option value="">Todas</option>';
+  document.querySelectorAll('.chips').forEach(div => {
+    div.querySelectorAll('.chip').forEach((c, idx) => {
+      if(idx === 0) c.classList.add('on'); else c.classList.remove('on');
+    });
+  });
+  AF();
+}
+document.getElementById('btnRst').addEventListener('click', limpiarTodo);
+document.getElementById('btnRst2').addEventListener('click', limpiarTodo);
+
+// ASIGNAR CIERRES DE VENTANAS MODALES
+document.getElementById('mc1').addEventListener('click', closeCard);
+document.getElementById('mc2').addEventListener('click', closeCard);
+document.getElementById('ov').addEventListener('click', function(e) { if(e.target===this) closeCard(); });
+
+document.getElementById('mcNew').addEventListener('click', closeNew);
+document.getElementById('mcNew2').addEventListener('click', closeNew);
+document.getElementById('btnSaveNew').addEventListener('click', saveNew);
+document.getElementById('btnAdd').addEventListener('click', openNew);
+document.getElementById('ovNew').addEventListener('click', function(e) { if(e.target===this) closeNew(); });
+
+document.getElementById('mcAdmin').addEventListener('click', function(){ document.getElementById('ovAdmin').classList.remove('open'); });
+document.getElementById('mcAdmin2').addEventListener('click', function(){ document.getElementById('ovAdmin').classList.remove('open'); });
+
+document.getElementById('mcDel').addEventListener('click', closeDel);
+document.getElementById('mcDel2').addEventListener('click', closeDel);
+document.getElementById('btnConfirmDel').addEventListener('click', confirmDel);
+document.getElementById('ovDel').addEventListener('click', function(e) { if(e.target===this) closeDel(); });
+
+// FECHA DE CABECERA
+var d = new Date();
+var meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+document.getElementById('hdate').innerText = d.getDate() + " " + meses[d.getMonth()] + " " + d.getFullYear();
+
+// DISPARO INICIAL
+window.addEventListener('DOMContentLoaded', function() {
+  initCharts();
+  iniciarEscuchaFirebase();
+});
 </script>
 </body>
 </html>
