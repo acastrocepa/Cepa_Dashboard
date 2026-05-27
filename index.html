@@ -648,38 +648,56 @@ function rst(){
 }
 
 async function initFB(){
+
   try{
+
     var m1=await import('https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js');
     var m2=await import('https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js');
-    var app=m1.initializeApp({apiKey:'AIzaSyBFT9jMhbN3zcILmKSghCuUf9paL3jFnLU',authDomain:'cepa-dashboard.firebaseapp.com',projectId:'cepa-dashboard',storageBucket:'cepa-dashboard.firebasestorage.app',messagingSenderId:'413720796219',appId:'1:413720796219:web:8884807d38840904e5901e'});
-    fbDb=m2.getFirestore(app);fbCol=m2.collection;fbGet=m2.getDocs;fbDoc=m2.doc;fbSet=m2.setDoc;fbSnap=m2.onSnapshot;fbDel=m2.deleteDoc;
-    var sn=await fbGet(fbCol(fbDb,FBC));
- RAW = [];
 
-var sn = await fbGet(fbCol(fbDb,'cepa_clientes'));
+    var app=m1.initializeApp({
+      apiKey:'AIzaSyBFT9jMhbN3zcILmKSghCuUf9paL3jFnLU',
+      authDomain:'cepa-dashboard.firebaseapp.com',
+      projectId:'cepa-dashboard',
+      storageBucket:'cepa-dashboard.firebasestorage.app',
+      messagingSenderId:'413720796219',
+      appId:'1:413720796219:web:8884807d38840904e5901e'
+    });
 
-sn.forEach(function(d){
+    fbDb=m2.getFirestore(app);
+    fbCol=m2.collection;
+    fbGet=m2.getDocs;
+    fbDoc=m2.doc;
+    fbSet=m2.setDoc;
+    fbSnap=m2.onSnapshot;
+    fbDel=m2.deleteDoc;
 
-  var dt = d.data();
+    var sn = await fbGet(fbCol(fbDb,'cepa_clientes'));
 
-RAW = [];
+    RAW = [];
 
-var sn = await fbGet(fbCol(fbDb,'cepa_clientes'));
+    sn.forEach(function(d){
 
-sn.forEach(function(d){
+      var dt = d.data();
 
-  var dt = d.data();
+      dt.rbd = d.id;
 
-  dt.rbd = d.id;
+      RAW.push(dt);
 
-  RAW.push(dt);
+    });
 
-});
+    console.log('Clientes cargados:', RAW.length);
 
-console.log('Clientes cargados:', RAW.length);
-});
+    AF();
+    updateLastColegios();
+    toast('Sincronizado con la nube');
 
-});
+  }catch(e){
+
+    console.warn('Firebase no disponible',e);
+
+  }
+
+}
     // Cargar colegios nuevos agregados desde el dashboard
     var snNuevos=await fbGet(fbCol(fbDb,'cepa_nuevos'));
     snNuevos.forEach(function(d){if(!RAW.find(function(x){return x.rbd===d.id;})){RAW.push(d.data());if(lastAdded.indexOf(d.id)<0)lastAdded.push(d.id);}});
@@ -896,8 +914,7 @@ Chart.defaults.color='#4a6a9a';
 Chart.defaults.font.family="'DM Sans',sans-serif";
 window.OM=OM;
 window.RAW=RAW;
-AF();
-updateLastColegios();
+
 initFB();
 </script>
 </body>
