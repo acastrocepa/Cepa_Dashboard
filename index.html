@@ -662,7 +662,19 @@ sn.forEach(function(d){
 
   var dt = d.data();
 
+RAW = [];
+
+var sn = await fbGet(fbCol(fbDb,'cepa_clientes'));
+
+sn.forEach(function(d){
+
+  var dt = d.data();
+
+  dt.rbd = d.id;
+
   RAW.push(dt);
+
+});
 
 });
     // Cargar colegios nuevos agregados desde el dashboard
