@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CEPA Dashboard</title>
+<style>
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#071426;
+    color:white;
+}
+header{
+    background:#0b1d36;
+    padding:20px;
+    border-bottom:1px solid #1d3b66;
+}
+.container{
+    display:grid;
+    grid-template-columns:280px 1fr;
+    min-height:100vh;
+}
+.sidebar{
+    background:#08182f;
+    padding:20px;
+    border-right:1px solid #1d3b66;
+}
+.main{
+    padding:20px;
+}
+.card{
+    background:#0b1d36;
+    border:1px solid #1d3b66;
+    border-radius:14px;
+    padding:20px;
+    margin-bottom:20px;
+}
+.kpis{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:15px;
+}
+.kpi{
+    background:#0b1d36;
+    border:1px solid #1d3b66;
+    border-radius:14px;
+    padding:20px;
+}
+.kpi h2{
+    margin:0;
+    font-size:38px;
+}
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+th,td{
+    padding:12px;
+    border-bottom:1px solid #163055;
+}
+button{
+    background:#1a6cf5;
+    border:none;
+    color:white;
+    padding:10px 16px;
+    border-radius:8px;
+    cursor:pointer;
+}
+input,select{
+    width:100%;
+    padding:10px;
+    border-radius:8px;
+    border:1px solid #1d3b66;
+    background:#0d223f;
+    color:white;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <h1>CEPA Clientes</h1>
+    <p>Dashboard Gerencial</p>
+</header>
+
+<div class="container">
+
+    <aside class="sidebar">
+        <div class="card">
+            <h3>Filtros</h3>
+
+            <label>Región</label>
+            <select>
+                <option>Todas</option>
+                <option>RM</option>
+                <option>VALPO</option>
+                <option>BBIO</option>
+            </select>
+
+            <br><br>
+
+            <label>Buscar Colegio</label>
+            <input type="text" placeholder="Buscar...">
+
+            <br><br>
+
+            <button>+ Agregar Colegio</button>
+        </div>
+    </aside>
+
+    <main class="main">
+
+        <div class="kpis">
+            <div class="kpi">
+                <div>Total colegios</div>
+                <h2>236</h2>
+            </div>
+
+            <div class="kpi">
+                <div>Matrícula total</div>
+                <h2>142.000</h2>
+            </div>
+
+            <div class="kpi">
+                <div>Promedio</div>
+                <h2>602</h2>
+            </div>
+
+            <div class="kpi">
+                <div>Con PIE</div>
+                <h2>78%</h2>
+            </div>
+
+            <div class="kpi">
+                <div>Subvencionados</div>
+                <h2>188</h2>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Ranking Completo</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Colegio</th>
+                        <th>Región</th>
+                        <th>Dependencia</th>
+                        <th>Matrícula</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Colegio San Pedro</td>
+                        <td>RM</td>
+                        <td>PART SUBV</td>
+                        <td>1.250</td>
+                    </tr>
+
+                    <tr>
+                        <td>2</td>
+                        <td>Liceo Nacional</td>
+                        <td>VALPO</td>
+                        <td>MUNICIPAL</td>
+                        <td>980</td>
+                    </tr>
+
+                    <tr>
+                        <td>3</td>
+                        <td>Colegio Bicentenario</td>
+                        <td>BBIO</td>
+                        <td>SLEP</td>
+                        <td>860</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+</div>
+
+</body>
+</html>
